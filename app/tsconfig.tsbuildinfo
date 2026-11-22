@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/scenecanvas.tsx","./src/components/viewcube.tsx","./src/data/catalog.ts","./src/store/useconfigstore.ts","./src/types/system.ts","./src/utils/exportpdfzip.ts","./src/utils/geometry.ts"],"version":"5.9.3"}

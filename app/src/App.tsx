@@ -1,0 +1,548 @@
+import React, { useRef, useState } from 'react';
+import {
+  Box,
+  Download,
+  FileArchive,
+  FileText,
+  FolderOpen,
+  Layers,
+  RotateCw,
+  Ruler,
+  Save,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
+import {
+  CATALOG_ITEMS,
+  PART_COLORS,
+  PIPE_COLORS,
+  REDUCER_PAIRS,
+  ROUND_DIAMETERS,
+} from './data/catalog';
+import { useConfigStore } from './store/useConfigStore';
+import { SceneCanvas } from './components/SceneCanvas';
+import { buildBom, downloadZipBundle, generatePdfDoc } from './utils/exportPdfZip';
+import { computeFrameBounds, estimateFrameLoad, getPipeAxisLengthMm } from './utils/geometry';
+
+export function App() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const meta = useConfigStore((s) => s.meta);
+  const setMeta = useConfigStore((s) => s.setMeta);
+  const nodes = useConfigStore((s) => s.nodes);
+  const pipes = useConfigStore((s) => s.pipes);
+  const selectedDiameter = useConfigStore((s) => s.selectedDiameter);
+  const setSelectedDiameter = useConfigStore((s) => s.setSelectedDiameter);
+  const selectedReducerPair = useConfigStore((s) => s.selectedReducerPair);
+  const setSelectedReducerPair = useConfigStore((s) => s.setSelectedReducerPair);
+  const activePartColor = useConfigStore((s) => s.activePartColor);
+  const setActivePartColor = useConfigStore((s) => s.setActivePartColor);
+  const activePipeColor = useConfigStore((s) => s.activePipeColor);
+  const setActivePipeColor = useConfigStore((s) => s.setActivePipeColor);
+  const selectedUid = useConfigStore((s) => s.selectedUid);
+  const selectedType = useConfigStore((s) => s.selectedType);
+  const pendingPort = useConfigStore((s) => s.pendingPort);
+  const setPendingPort = useConfigStore((s) => s.setPendingPort);
+  const showDimensions = useConfigStore((s) => s.showDimensions);
+  const setShowDimensions = useConfigStore((s) => s.setShowDimensions);
+
+  const addNode = useConfigStore((s) => s.addNode);
+  const addFreePipe = useConfigStore((s) => s.addFreePipe);
+  const addPipeFromPort = useConfigStore((s) => s.addPipeFromPort);
+  const rotateNodeAxis = useConfigStore((s) => s.rotateNodeAxis);
+  const setItemColor = useConfigStore((s) => s.setItemColor);
+  const updatePipeLength = useConfigStore((s) => s.updatePipeLength);
+  const deleteSelected = useConfigStore((s) => s.deleteSelected);
+  const loadDemoFrame = useConfigStore((s) => s.loadDemoFrame);
+  const clearProject = useConfigStore((s) => s.clearProject);
+  const exportProjectFile = useConfigStore((s) => s.exportProjectFile);
+  const importProjectFile = useConfigStore((s) => s.importProjectFile);
+
+  const [portPipeLen, setPortPipeLen] = useState(400);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [rightTab, setRightTab] = useState<'props' | 'bom' | 'statics'>('bom');
+  const [busyZip, setBusyZip] = useState(false);
+
+  const selectedNode = selectedType === 'node' ? nodes.find((n) => n.uid === selectedUid) : undefined;
+  const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.uid === selectedUid) : undefined;
+
+  const { nodeRows, pipeRows } = buildBom(nodes, pipes);
+  const bounds = computeFrameBounds(nodes, pipes);
+  const load = estimateFrameLoad(nodes, pipes);
+
+  const handleSaveJson = () => {
+    const data = exportProjectFile();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(meta.name || 'gestell').replace(/[^a-zA-Z0-9_-]+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleUploadJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        importProjectFile(parsed);
+      } catch {
+        alert('Die Datei konnte nicht als gültiges Gestell-Projekt geladen werden.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleExportPdf = () => {
+    const dataUrl = canvasRef.current?.toDataURL('image/png');
+    const doc = generatePdfDoc(meta, nodes, pipes, dataUrl);
+    const safeName = (meta.name || 'gestell').replace(/[^a-zA-Z0-9_-]+/g, '_');
+    doc.save(`${safeName}_Zeichnung_Stueckliste.pdf`);
+  };
+
+  const handleExportZip = async () => {
+    setBusyZip(true);
+    try {
+      const dataUrl = canvasRef.current?.toDataURL('image/png');
+      await downloadZipBundle(exportProjectFile(), dataUrl);
+    } finally {
+      setBusyZip(false);
+    }
+  };
+
+  const filteredCatalog = CATALOG_ITEMS.filter((item) => {
+    const q = catalogSearch.trim().toLowerCase();
+    return !q || item.name.toLowerCase().includes(q) || item.articleCode.toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="app-shell">
+      {/* Kopfzeile */}
+      <header className="topbar">
+        <div className="topbar-left">
+          <div className="brand">
+            <Box size={20} className="brand-icon" />
+            <span>Gestell-Konfigurator</span>
+          </div>
+          <input
+            className="meta-input"
+            value={meta.name}
+            onChange={(e) => setMeta({ name: e.target.value })}
+            placeholder="Projektname..."
+            title="Projektname für PDF-Kopf"
+          />
+          <input
+            className="meta-input meta-author"
+            value={meta.author}
+            onChange={(e) => setMeta({ author: e.target.value })}
+            placeholder="Autor (optional)"
+            title="Autor für PDF-Kopf"
+          />
+        </div>
+
+        <div className="topbar-actions">
+          <button className="btn btn-soft" onClick={loadDemoFrame} title="Beispiel-Gestell laden">
+            <Sparkles size={15} /> Beispiel
+          </button>
+          <button
+            className={`btn ${showDimensions ? 'btn-active' : 'btn-soft'}`}
+            onClick={() => setShowDimensions(!showDimensions)}
+            title="Maße in 3D anzeigen"
+          >
+            <Ruler size={15} /> Maße
+          </button>
+          <button className="btn btn-soft" onClick={() => fileInputRef.current?.click()} title="Projekt-JSON laden">
+            <FolderOpen size={15} /> Laden
+          </button>
+          <input ref={fileInputRef} type="file" accept=".json" hidden onChange={handleUploadJson} />
+          <button className="btn btn-soft" onClick={handleSaveJson} title="Projekt als JSON speichern">
+            <Save size={15} /> Speichern
+          </button>
+          <button className="btn btn-primary" onClick={handleExportPdf} title="Bemaßungszeichnung + Stückliste als PDF">
+            <FileText size={15} /> PDF
+          </button>
+          <button
+            className="btn btn-success"
+            onClick={handleExportZip}
+            disabled={busyZip}
+            title="PDF + Stückliste + verwendete STLs als ZIP"
+          >
+            <FileArchive size={15} /> {busyZip ? 'Packe ZIP...' : 'ZIP (inkl. STLs)'}
+          </button>
+          <button className="btn btn-danger-ghost" onClick={clearProject} title="Szene leeren">
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </header>
+
+      {/* Hauptbereich */}
+      <div className="workspace">
+        {/* Linke Sidebar: Katalog */}
+        <aside className="sidebar-left">
+          <div className="panel-section">
+            <div className="section-title">1. Rohr-Durchmesser (mixbar)</div>
+            <div className="dia-pills">
+              {ROUND_DIAMETERS.map((d) => (
+                <button
+                  key={d}
+                  className={`dia-btn ${selectedDiameter === d ? 'active' : ''}`}
+                  onClick={() => setSelectedDiameter(d)}
+                >
+                  Ø {d} mm
+                </button>
+              ))}
+            </div>
+            <div className="future-hint">
+              Profilsystem: Rundrohr (erweiterbar für Vierkant &amp; Alu-Systemprofil)
+            </div>
+          </div>
+
+          <div className="panel-section">
+            <div className="section-title">2. Farben</div>
+            <div className="color-row">
+              <span>Verbinder:</span>
+              <div className="swatches">
+                {PART_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    className={`swatch ${activePartColor === c.hex ? 'active' : ''}`}
+                    style={{ background: c.hex }}
+                    title={c.name}
+                    onClick={() => setActivePartColor(c.hex)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="color-row">
+              <span>Rohre:</span>
+              <div className="swatches">
+                {PIPE_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    className={`swatch ${activePipeColor === c.hex ? 'active' : ''}`}
+                    style={{ background: c.hex }}
+                    title={c.name}
+                    onClick={() => setActivePipeColor(c.hex)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="panel-section">
+            <div className="section-title">3. Bauteile (Drag &amp; Drop oder Klick)</div>
+            <input
+              className="search-box"
+              type="search"
+              placeholder="Bauteil suchen..."
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+            />
+
+            {/* Rohr-Element */}
+            <div
+              className="catalog-card pipe-card"
+              draggable
+              onDragStart={(e) =>
+                e.dataTransfer.setData(
+                  'application/x-gestell-item',
+                  JSON.stringify({ kind: 'pipe', diameterMm: selectedDiameter })
+                )
+              }
+              onClick={() => addFreePipe([-250, 20, 0], [250, 20, 0], selectedDiameter)}
+            >
+              <div className="pipe-badge">Ø {selectedDiameter}</div>
+              <div className="catalog-info">
+                <div className="catalog-name">Rundrohr (500 mm)</div>
+                <div className="catalog-sub">Ziehen oder Port-zu-Port klicken</div>
+              </div>
+            </div>
+
+            {/* Reduzier-Paar Auswahl */}
+            <div className="reducer-select-row">
+              <span>Adapter-Paar:</span>
+              <select
+                value={`${selectedReducerPair[0]}_${selectedReducerPair[1]}`}
+                onChange={(e) => {
+                  const [g, k] = e.target.value.split('_').map(Number);
+                  setSelectedReducerPair([g, k]);
+                }}
+              >
+                {REDUCER_PAIRS.map(([g, k]) => (
+                  <option key={`${g}_${k}`} value={`${g}_${k}`}>
+                    {g} → {k} mm
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="catalog-list">
+              {filteredCatalog.map((item) => {
+                const variant = item.isReducer
+                  ? item.getVariant(selectedReducerPair[0], selectedReducerPair[1])
+                  : item.getVariant(selectedDiameter);
+                return (
+                  <div
+                    key={item.id}
+                    className="catalog-card"
+                    draggable
+                    onDragStart={(e) =>
+                      e.dataTransfer.setData(
+                        'application/x-gestell-item',
+                        JSON.stringify({ kind: 'node', catalogId: item.id, diameterMm: selectedDiameter })
+                      )
+                    }
+                    onClick={() => addNode(item.id, [0, 0, 0])}
+                    title={`${item.description} – In 3D-Szene ziehen oder klicken`}
+                  >
+                    <img src={variant.previewPath} alt={item.name} className="catalog-thumb" />
+                    <div className="catalog-info">
+                      <div className="catalog-name">{item.name}</div>
+                      <div className="catalog-sub">{variant.articleNumber}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
+
+        {/* 3D Viewport */}
+        <main className="viewport-area">
+          <SceneCanvas onCanvasReady={(c) => (canvasRef.current = c)} />
+
+          {/* Statusleiste unten im Viewport */}
+          <div className="viewport-hud">
+            <span>
+              Maße: <strong>{bounds.width} × {bounds.depth} × {bounds.height} mm</strong>
+            </span>
+            <span>
+              Teile: <strong>{nodes.length} Verbinder</strong> · <strong>{pipes.length} Rohre</strong>
+            </span>
+            {pendingPort ? (
+              <span className="hud-port-hint">
+                Port gewählt – zweiten Port anklicken zum Verbinden oder rechts Länge eingeben!
+                <button className="hud-cancel" onClick={() => setPendingPort(null)}>Abbrechen</button>
+              </span>
+            ) : (
+              <span className="hud-tip">Tipp: Blauen Port anklicken, um Rohre exakt anzudocken.</span>
+            )}
+          </div>
+        </main>
+
+        {/* Rechte Sidebar: Eigenschaften, Stückliste, Statik */}
+        <aside className="sidebar-right">
+          <div className="tab-bar">
+            <button className={rightTab === 'props' ? 'active' : ''} onClick={() => setRightTab('props')}>
+              <Layers size={14} /> Bauteil
+            </button>
+            <button className={rightTab === 'bom' ? 'active' : ''} onClick={() => setRightTab('bom')}>
+              <Download size={14} /> Stückliste
+            </button>
+            <button className={rightTab === 'statics' ? 'active' : ''} onClick={() => setRightTab('statics')}>
+              <ShieldAlert size={14} /> Statik
+            </button>
+          </div>
+
+          {rightTab === 'props' && (
+            <div className="tab-content">
+              {pendingPort && (
+                <div className="box-highlight">
+                  <div className="section-title">Rohr ab Port spannen</div>
+                  <div className="inline-row">
+                    <input
+                      type="number"
+                      min={50}
+                      max={4000}
+                      step={10}
+                      value={portPipeLen}
+                      onChange={(e) => setPortPipeLen(Number(e.target.value))}
+                    />
+                    <span>mm</span>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => addPipeFromPort(pendingPort, portPipeLen)}
+                    >
+                      Anfügen
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode && (
+                <div className="prop-card">
+                  <div className="section-title">Ausgewählter Verbinder</div>
+                  <div className="prop-line"><span>Artikel-Nr.:</span><strong>{selectedNode.articleNumber}</strong></div>
+                  <div className="prop-line">
+                    <span>Position (mm):</span>
+                    <code>{selectedNode.position.join(', ')}</code>
+                  </div>
+
+                  <div className="section-title" style={{ marginTop: 10 }}>Drehen (90°)</div>
+                  <div className="rot-grid">
+                    <button className="btn btn-soft" onClick={() => rotateNodeAxis(selectedNode.uid, 'x', 90)}>
+                      <RotateCw size={13} /> X +90°
+                    </button>
+                    <button className="btn btn-soft" onClick={() => rotateNodeAxis(selectedNode.uid, 'y', 90)}>
+                      <RotateCw size={13} /> Y +90°
+                    </button>
+                    <button className="btn btn-soft" onClick={() => rotateNodeAxis(selectedNode.uid, 'z', 90)}>
+                      <RotateCw size={13} /> Z +90°
+                    </button>
+                  </div>
+
+                  <div className="section-title" style={{ marginTop: 10 }}>Farbe ändern</div>
+                  <div className="swatches">
+                    {PART_COLORS.map((c) => (
+                      <button
+                        key={c.hex}
+                        className={`swatch ${selectedNode.color === c.hex ? 'active' : ''}`}
+                        style={{ background: c.hex }}
+                        onClick={() => setItemColor(selectedNode.uid, 'node', c.hex)}
+                      />
+                    ))}
+                  </div>
+
+                  <button className="btn btn-danger" style={{ marginTop: 14, width: '100%' }} onClick={deleteSelected}>
+                    <Trash2 size={14} /> Bauteil löschen
+                  </button>
+                </div>
+              )}
+
+              {selectedPipe && (
+                <div className="prop-card">
+                  <div className="section-title">Ausgewähltes Rohr</div>
+                  <div className="prop-line"><span>Durchmesser:</span><strong>Ø {selectedPipe.diameterMm} mm</strong></div>
+                  <div className="prop-line"><span>Achsmaß:</span><strong>{getPipeAxisLengthMm(selectedPipe)} mm</strong></div>
+
+                  <div className="section-title" style={{ marginTop: 10 }}>Länge anpassen (mm)</div>
+                  <div className="inline-row">
+                    <input
+                      type="number"
+                      min={30}
+                      max={4000}
+                      step={10}
+                      value={getPipeAxisLengthMm(selectedPipe)}
+                      onChange={(e) => updatePipeLength(selectedPipe.uid, Math.max(30, Number(e.target.value)))}
+                    />
+                    <span>mm</span>
+                  </div>
+
+                  <div className="section-title" style={{ marginTop: 10 }}>Farbe ändern</div>
+                  <div className="swatches">
+                    {PIPE_COLORS.map((c) => (
+                      <button
+                        key={c.hex}
+                        className={`swatch ${selectedPipe.color === c.hex ? 'active' : ''}`}
+                        style={{ background: c.hex }}
+                        onClick={() => setItemColor(selectedPipe.uid, 'pipe', c.hex)}
+                      />
+                    ))}
+                  </div>
+
+                  <button className="btn btn-danger" style={{ marginTop: 14, width: '100%' }} onClick={deleteSelected}>
+                    <Trash2 size={14} /> Rohr löschen
+                  </button>
+                </div>
+              )}
+
+              {!selectedNode && !selectedPipe && !pendingPort && (
+                <p className="muted-text">
+                  Klicke ein Bauteil oder Rohr in der 3D-Szene an, um es zu verschieben, zu drehen, umzufärben oder Maße anzupassen.
+                </p>
+              )}
+            </div>
+          )}
+
+          {rightTab === 'bom' && (
+            <div className="tab-content">
+              <div className="section-title">Rohr-Zuschnittliste</div>
+              {pipeRows.length === 0 ? (
+                <p className="muted-text">Noch keine Rohre im Gestell.</p>
+              ) : (
+                <table className="bom-table">
+                  <thead>
+                    <tr>
+                      <th>Ø</th>
+                      <th>Schnittlänge</th>
+                      <th>Menge</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pipeRows.map((r, i) => (
+                      <tr key={i}>
+                        <td>Ø {r.diameterMm} mm</td>
+                        <td><strong>{r.cutLengthMm} mm</strong></td>
+                        <td>{r.count}×</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <div className="section-title" style={{ marginTop: 16 }}>3D-Druckteile (Verbinder)</div>
+              {nodeRows.length === 0 ? (
+                <p className="muted-text">Noch keine Verbinder platziert.</p>
+              ) : (
+                <table className="bom-table">
+                  <thead>
+                    <tr>
+                      <th>Art.-Nr.</th>
+                      <th>Teil</th>
+                      <th>Menge</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nodeRows.map((r, i) => (
+                      <tr key={i}>
+                        <td><code>{r.articleNumber}</code></td>
+                        <td>
+                          <div>{r.name}</div>
+                          <a className="stl-dl" href={r.stlPath} download>
+                            {r.stlPath.split('/').pop()}
+                          </a>
+                        </td>
+                        <td>{r.count}×</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {rightTab === 'statics' && (
+            <div className="tab-content">
+              <div className="section-title">Belastbarkeits-Schätzung</div>
+              <div className="stat-box">
+                <div className="prop-line"><span>Max. Spannweite:</span><strong>{load.maxSpanMm} mm (Ø {load.maxSpanDiameterMm})</strong></div>
+                <div className="prop-line"><span>Richtwert Einzellast (Mitte):</span><strong>~ {load.estimatedSafeCenterLoadKg} kg</strong></div>
+                <div className="prop-line"><span>Richtwert Gesamtgestell:</span><strong>~ {load.estimatedFrameLoadKg} kg</strong></div>
+              </div>
+
+              {load.warnings.length > 0 && (
+                <ul className="warn-list">
+                  {load.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="disclaimer-box">
+                <strong>Haftungsausschluss:</strong> Diese Berechnung ist nur eine grobe, unverbindliche Überschlagsrechnung (Annahme: Alu-Rohr + gedruckter Verbinder). Sie ersetzt keine statische Prüfung. Druckmaterial (PLA/PETG/ASA), Infill, Wandstärke und Layerhaftung beeinflussen die Tragfähigkeit stark. Nutzung auf eigene Verantwortung – keine Haftung.
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+export default App;
