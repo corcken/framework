@@ -337,9 +337,8 @@ export const SceneCanvas: React.FC<{
           sectionSize={250}
           sectionThickness={1.2}
           sectionColor="#94a3b8"
-          fadeDistance={100000}
+          fadeDistance={20000}
           fadeStrength={0}
-          infiniteGrid
           position={[0, -0.5, 0]}
         />
 
