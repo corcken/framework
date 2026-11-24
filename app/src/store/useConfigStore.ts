@@ -3,7 +3,15 @@ import { getCatalogItem, PART_COLORS, PIPE_COLORS } from '../data/catalog';
 import { PlacedNode, PipeSegment, ProjectFile, ProjectMeta } from '../types/system';
 import { getWorldPort } from '../utils/geometry';
 
-export type CameraPreset = 'iso' | 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
+export type CameraPreset =
+  | 'iso'
+  | 'top'
+  | 'bottom'
+  | 'front'
+  | 'back'
+  | 'left'
+  | 'right'
+  | [number, number, number];
 
 export interface PendingPortRef {
   nodeUid: string;

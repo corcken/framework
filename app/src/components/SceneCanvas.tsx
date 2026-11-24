@@ -50,26 +50,29 @@ const CameraRig: React.FC = () => {
     if (!controlsRef.current) return;
     const offset = new THREE.Vector3().subVectors(camera.position, controlsRef.current.target);
     const sph = new THREE.Spherical().setFromVector3(offset);
-    const rotY = -THREE.MathUtils.radToDeg(sph.theta);
-    const rotX = -(90 - THREE.MathUtils.radToDeg(sph.phi));
-    window.dispatchEvent(new CustomEvent('viewcube-sync', { detail: { rotX, rotY } }));
+    window.dispatchEvent(new CustomEvent('viewcube-sync', { detail: { theta: sph.theta, phi: sph.phi } }));
   };
 
   useEffect(() => {
     if (cameraTick === 0) return;
-    const dist = 950;
     const target = new THREE.Vector3(0, 180, 0);
-    const posMap: Record<string, [number, number, number]> = {
-      iso: [700, 560, 700],
-      top: [0, dist, 0.01],
-      bottom: [0, -dist, 0.01],
-      front: [0, 180, dist],
-      back: [0, 180, -dist],
-      right: [dist, 180, 0],
-      left: [-dist, 180, 0],
+    const dirMap: Record<string, [number, number, number]> = {
+      iso: [700, 380, 700],
+      top: [0, 1, 0.001],
+      bottom: [0, -1, 0.001],
+      front: [0, 0, 1],
+      back: [0, 0, -1],
+      right: [1, 0, 0],
+      left: [-1, 0, 0],
     };
-    const [x, y, z] = posMap[cameraPreset] ?? posMap.iso;
-    camera.position.set(x, y, z);
+    const rawDir = Array.isArray(cameraPreset) ? cameraPreset : (dirMap[cameraPreset] ?? dirMap.iso);
+    const dir = new THREE.Vector3(rawDir[0], rawDir[1], rawDir[2]);
+    if (dir.x === 0 && dir.z === 0) {
+      dir.z = 0.001;
+    }
+    dir.normalize();
+    const dist = !Array.isArray(cameraPreset) && cameraPreset === 'iso' ? 1060 : 950;
+    camera.position.copy(target).addScaledVector(dir, dist);
     if (controlsRef.current) {
       controlsRef.current.target.copy(target);
       controlsRef.current.update();
@@ -327,14 +330,16 @@ export const SceneCanvas: React.FC<{
         <directionalLight position={[-500, 400, -400]} intensity={0.45} />
 
         <Grid
-          args={[3000, 3000]}
+          args={[6000, 6000]}
           cellSize={50}
           cellThickness={0.6}
           cellColor="#cbd5e1"
           sectionSize={250}
           sectionThickness={1.2}
           sectionColor="#94a3b8"
-          fadeDistance={2600}
+          fadeDistance={100000}
+          fadeStrength={0}
+          infiniteGrid
           position={[0, -0.5, 0]}
         />
 
