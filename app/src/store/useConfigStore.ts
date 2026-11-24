@@ -79,7 +79,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   selectedUid: null,
   selectedType: null,
   pendingPort: null,
-  showDimensions: true,
+  showDimensions: false,
   cameraPreset: 'iso',
   cameraTick: 0,
 

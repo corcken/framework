@@ -106,6 +106,26 @@ html, body, #root {
   color: var(--accent);
 }
 
+.toggle-pill {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-weight: 700;
+  margin-left: 2px;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.toggle-pill.off {
+  background: #e2e8f0;
+  color: var(--muted);
+}
+
+.toggle-pill.on {
+  background: var(--accent);
+  color: #ffffff;
+}
+
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);

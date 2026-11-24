@@ -230,11 +230,16 @@ export function App() {
             <Sparkles size={15} /> Beispiel
           </button>
           <button
+            type="button"
             className={`btn ${showDimensions ? 'btn-active' : 'btn-soft'}`}
             onClick={() => setShowDimensions(!showDimensions)}
-            title="Maße in 3D anzeigen"
+            title={`Rohrbemaßung in 3D-Ansicht ${showDimensions ? 'ausschalten' : 'einschalten'}`}
           >
-            <Ruler size={15} /> Maße
+            <Ruler size={15} />
+            <span>Rohrbemaßung</span>
+            <span className={`toggle-pill ${showDimensions ? 'on' : 'off'}`}>
+              {showDimensions ? 'An' : 'Aus'}
+            </span>
           </button>
           <button className="btn btn-soft" onClick={() => fileInputRef.current?.click()} title="Projekt-JSON laden">
             <FolderOpen size={15} /> Laden
