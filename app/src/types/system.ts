@@ -31,11 +31,25 @@ export interface CatalogVariantInfo {
   meshOffset?: [number, number, number];
 }
 
+export type ItemCategory =
+  | 'rohre'
+  | 'ecken_winkel'
+  | 't_kreuz'
+  | 'muffen_adapter'
+  | 'halterungen'
+  | 'abschluss_fuss';
+
+export interface CategoryDef {
+  id: ItemCategory;
+  name: string;
+  description?: string;
+}
+
 export interface CatalogItem {
   id: string;
   articleCode: string;
   name: string;
-  category: 'verbinder' | 'muffen' | 'abschluss';
+  category: ItemCategory;
   profileFamily: ProfileFamily;
   description: string;
   isReducer?: boolean;

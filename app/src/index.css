@@ -228,13 +228,117 @@ html, body, #root {
   transform: scale(1.18);
 }
 
+.catalog-search-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.category-toggle-all-btn {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.73rem;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.12s ease;
+}
+
+.category-toggle-all-btn:hover {
+  color: var(--accent);
+}
+
+.category-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.category-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.category-group.is-open {
+  border-color: #cbd5e1;
+}
+
+.category-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--surface-alt);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+
+.category-header:hover {
+  background: #f1f5f9;
+}
+
+.category-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cat-chevron {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.category-name {
+  font-size: 0.8rem;
+  letter-spacing: -0.01em;
+}
+
+.category-count-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  color: var(--muted);
+}
+
+.category-content {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.category-empty-search {
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .search-box {
   width: 100%;
   padding: 6px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 0.84rem;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
 }
 
 .reducer-select-row {
@@ -243,7 +347,11 @@ html, body, #root {
   justify-content: space-between;
   font-size: 0.78rem;
   color: var(--muted);
-  margin: 8px 0;
+  margin: 4px 0 6px 0;
+  padding: 4px 6px;
+  background: var(--surface-alt);
+  border-radius: 6px;
+  border: 1px dashed var(--border);
 }
 
 .reducer-select-row select {
@@ -251,6 +359,7 @@ html, body, #root {
   border-radius: 5px;
   padding: 3px 6px;
   font-size: 0.78rem;
+  background: var(--surface);
 }
 
 .catalog-list {

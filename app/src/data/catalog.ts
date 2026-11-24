@@ -1,4 +1,4 @@
-import { CatalogItem, PortDef, ProfileSpec } from '../types/system';
+import { CatalogItem, CategoryDef, PortDef, ProfileSpec } from '../types/system';
 
 export const ROUND_DIAMETERS = [20, 25, 30, 40] as const;
 
@@ -9,6 +9,39 @@ export const REDUCER_PAIRS: Array<[number, number]> = [
   [30, 25],
   [30, 20],
   [25, 20],
+];
+
+export const CATALOG_CATEGORIES: CategoryDef[] = [
+  {
+    id: 'rohre',
+    name: 'Rohre & Profile',
+    description: 'Rundrohre in verschiedenen Durchmessern und Längen.',
+  },
+  {
+    id: 'ecken_winkel',
+    name: 'Eck- & Winkelverbinder',
+    description: '2-Wege, 3-Wege-Ecken, 45°-Winkel und Scharnierverbinder.',
+  },
+  {
+    id: 't_kreuz',
+    name: 'T- & Kreuzverbinder',
+    description: 'T-Stücke, 45°-Abzweige und Kreuzverbinder (eben & versetzt).',
+  },
+  {
+    id: 'muffen_adapter',
+    name: 'Muffen & Adapter',
+    description: '180°-Verbinder, Reduziermuffen und Gelenkmuffen.',
+  },
+  {
+    id: 'halterungen',
+    name: 'Halterungen & Schellen',
+    description: 'Platten- & Regalbodenhalter, Schellen und Kabelclips.',
+  },
+  {
+    id: 'abschluss_fuss',
+    name: 'Abschlüsse & Standfüße',
+    description: 'Standfüße / Wandlager und Rohrendkappen.',
+  },
 ];
 
 export const PROFILE_SPECS: Record<string, ProfileSpec> = {
@@ -60,7 +93,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Eckverbinder',
     articleCode: 'ECK2',
     name: '90°-Eckverbinder (2-fach)',
-    category: 'verbinder',
+    category: 'ecken_winkel',
     profileFamily: 'round',
     description: 'Verbindet zwei Rohre im 90°-Winkel in einer Ebene.',
     getVariant: (d) => {
@@ -81,7 +114,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Eckverbinder_3fach',
     articleCode: 'ECK3',
     name: '90°-Eckverbinder (3-fach)',
-    category: 'verbinder',
+    category: 'ecken_winkel',
     profileFamily: 'round',
     description: '3-Wege-Würfelecke (X, Y, Z) für stabile Gestellecken.',
     getVariant: (d) => {
@@ -103,7 +136,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Eckverbinder_4fach',
     articleCode: 'ECK4',
     name: '4-Wege-Eckverbinder (3D-T)',
-    category: 'verbinder',
+    category: 'ecken_winkel',
     profileFamily: 'round',
     description: 'Durchgehendes Standrohr (oben/unten) mit 2× 90°-Abgängen für Zwischenböden.',
     getVariant: (d) => {
@@ -126,7 +159,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'T_Verbinder',
     articleCode: 'TV90',
     name: '90°-T-Verbinder',
-    category: 'verbinder',
+    category: 't_kreuz',
     profileFamily: 'round',
     description: 'Durchgehendes Hauptrohr mit 90°-Abzweig in einer Ebene.',
     getVariant: (d) => {
@@ -148,7 +181,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'T_Verbinder_45',
     articleCode: 'TV45',
     name: '45°-T-Abzweig',
-    category: 'verbinder',
+    category: 't_kreuz',
     profileFamily: 'round',
     description: 'Durchgehendes Hauptrohr mit 45°-Abzweig für Diagonalstreben.',
     getVariant: (d) => {
@@ -171,7 +204,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Winkel_45',
     articleCode: 'W45',
     name: '45°-Winkelverbinder',
-    category: 'verbinder',
+    category: 'ecken_winkel',
     profileFamily: 'round',
     description: 'Verbindet zwei Rohre im 45°-Winkel.',
     getVariant: (d) => {
@@ -193,7 +226,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Kreuzverbinder_eben',
     articleCode: 'KRE',
     name: '4-Wege-Kreuz (eben)',
-    category: 'verbinder',
+    category: 't_kreuz',
     profileFamily: 'round',
     description: '4 Rohre in einer Ebene (+).',
     getVariant: (d) => {
@@ -216,7 +249,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Kreuzverbinder',
     articleCode: 'KRV',
     name: '90°-Kreuzverbinder (versetzt)',
-    category: 'verbinder',
+    category: 't_kreuz',
     profileFamily: 'round',
     description: 'Zwei durchgehende Rohre versetzt übereinander.',
     getVariant: (d) => {
@@ -240,7 +273,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Kreuzverbinder_mit_Deckel',
     articleCode: 'KRD',
     name: '90°-Kreuzverbinder m. Deckel',
-    category: 'verbinder',
+    category: 't_kreuz',
     profileFamily: 'round',
     description: 'Versetzter Kreuzverbinder, oberes Rohr einseitig geschlossen.',
     getVariant: (d) => {
@@ -263,7 +296,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Gelenkverbinder',
     articleCode: 'GEL',
     name: 'Gelenkverbinder (2-teilig)',
-    category: 'verbinder',
+    category: 'ecken_winkel',
     profileFamily: 'round',
     description: 'Scharnier-Verbinder (Gabel + Zunge) für variable Winkel.',
     getVariant: (d) => {
@@ -284,7 +317,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Verbinder_gerade',
     articleCode: 'GER',
     name: '180°-Geradverbinder',
-    category: 'abschluss',
+    category: 'muffen_adapter',
     profileFamily: 'round',
     description: 'Verlängerungsmuffe in einer Linie mit Mittelanschlag.',
     getVariant: (d) => {
@@ -305,7 +338,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Reduziermuffe',
     articleCode: 'RED',
     name: 'Reduziermuffe (Adapter)',
-    category: 'abschluss',
+    category: 'muffen_adapter',
     profileFamily: 'round',
     isReducer: true,
     description: 'Adapter zwischen zwei unterschiedlichen Rohrdurchmessern.',
@@ -329,7 +362,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Fuss',
     articleCode: 'FUSS',
     name: 'Standfuß / Wandlager',
-    category: 'abschluss',
+    category: 'abschluss_fuss',
     profileFamily: 'round',
     description: 'Standfuß mit 4 Senklöchern und Verstärkungskegel.',
     getVariant: (d) => {
@@ -350,7 +383,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Deckel',
     articleCode: 'DEC',
     name: 'Rohrdeckel / Endkappe',
-    category: 'abschluss',
+    category: 'abschluss_fuss',
     profileFamily: 'round',
     description: 'Abgerundete Endkappe zum Verschließen eines Rohrendes.',
     getVariant: (d) => {
@@ -370,7 +403,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Muffe1',
     articleCode: 'MUF1',
     name: 'Muffe 1 (parallele Scheibe)',
-    category: 'muffen',
+    category: 'muffen_adapter',
     profileFamily: 'round',
     description: 'Durchgehende Muffe mit paralleler Befestigungsscheibe.',
     getVariant: (d) => {
@@ -391,7 +424,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Muffe2',
     articleCode: 'MUF2',
     name: 'Muffe 2 (Doppel-Lasche)',
-    category: 'muffen',
+    category: 'muffen_adapter',
     profileFamily: 'round',
     description: 'Durchgehende Muffe mit Gabelaufnahme für 5 mm Laschen.',
     getVariant: (d) => {
@@ -412,7 +445,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Endstueck1',
     articleCode: 'END1',
     name: 'Endstück 1 (axiale Lasche)',
-    category: 'muffen',
+    category: 'muffen_adapter',
     profileFamily: 'round',
     description: 'Rohrendstück mit axialer 5 mm Befestigungslasche.',
     getVariant: (d) => {
@@ -432,7 +465,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Clip_Schelle',
     articleCode: 'CLIP',
     name: 'C-Schelle (Universal-Flansch)',
-    category: 'muffen',
+    category: 'halterungen',
     profileFamily: 'round',
     description: 'Aufklipsbare Rohrschelle mit 2× M5 Universal-Flansch.',
     getVariant: (d) => ({
@@ -448,7 +481,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Plattenhalter',
     articleCode: 'PLAT',
     name: 'Platten- & Regalbodenhalter',
-    category: 'muffen',
+    category: 'halterungen',
     profileFamily: 'round',
     description: 'Verstärkte Rohrmuffe mit 6 mm Auflageplatte & 3 Rippen.',
     getVariant: (d) => ({
@@ -464,7 +497,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'Kabelclip',
     articleCode: 'KABL',
     name: 'Kabelclip (aufklipsbar)',
-    category: 'muffen',
+    category: 'halterungen',
     profileFamily: 'round',
     description: 'Schnapp-Clip für saubere Kabelführung am Rohr.',
     getVariant: (d) => ({

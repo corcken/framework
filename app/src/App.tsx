@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Box,
+  ChevronDown,
+  ChevronRight,
   Download,
   FileArchive,
   FileText,
@@ -14,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
+  CATALOG_CATEGORIES,
   CATALOG_ITEMS,
   PART_COLORS,
   PIPE_COLORS,
@@ -64,6 +67,37 @@ export function App() {
   const [catalogSearch, setCatalogSearch] = useState('');
   const [rightTab, setRightTab] = useState<'props' | 'bom' | 'statics'>('bom');
   const [busyZip, setBusyZip] = useState(false);
+
+  // Zustand für ausklappbare Kategorien (standardmäßig alle geöffnet)
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    for (const c of CATALOG_CATEGORIES) {
+      init[c.id] = true;
+    }
+    return init;
+  });
+
+  const toggleCategory = (catId: string) => {
+    setOpenCategories((prev) => ({
+      ...prev,
+      [catId]: !prev[catId],
+    }));
+  };
+
+  const allCategoriesOpen = CATALOG_CATEGORIES.every((c) => openCategories[c.id]);
+
+  const toggleAllCategories = () => {
+    const nextState = !allCategoriesOpen;
+    const next: Record<string, boolean> = {};
+    for (const c of CATALOG_CATEGORIES) {
+      next[c.id] = targetStateNext(nextState);
+    }
+    setOpenCategories(next);
+  };
+
+  function targetStateNext(s: boolean) {
+    return s;
+  }
 
   const selectedNode = selectedType === 'node' ? nodes.find((n) => n.uid === selectedUid) : undefined;
   const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.uid === selectedUid) : undefined;
@@ -116,10 +150,55 @@ export function App() {
     }
   };
 
-  const filteredCatalog = CATALOG_ITEMS.filter((item) => {
-    const q = catalogSearch.trim().toLowerCase();
-    return !q || item.name.toLowerCase().includes(q) || item.articleCode.toLowerCase().includes(q);
-  });
+  const searchQuery = catalogSearch.trim().toLowerCase();
+
+  const pipeMatchesSearch = useMemo(() => {
+    if (!searchQuery) return true;
+    return (
+      'rundrohr'.includes(searchQuery) ||
+      'rohr'.includes(searchQuery) ||
+      '500'.includes(searchQuery) ||
+      'profil'.includes(searchQuery)
+    );
+  }, [searchQuery]);
+
+  const filteredCatalog = useMemo(() => {
+    return CATALOG_ITEMS.filter((item) => {
+      if (!searchQuery) return true;
+      return (
+        item.name.toLowerCase().includes(searchQuery) ||
+        item.articleCode.toLowerCase().includes(searchQuery) ||
+        item.description.toLowerCase().includes(searchQuery)
+      );
+    });
+  }, [searchQuery]);
+
+  const itemsByCategory = useMemo(() => {
+    const map: Record<string, typeof CATALOG_ITEMS> = {};
+    for (const cat of CATALOG_CATEGORIES) {
+      map[cat.id] = [];
+    }
+    for (const item of filteredCatalog) {
+      if (!map[item.category]) {
+        map[item.category] = [];
+      }
+      map[item.category].push(item);
+    }
+    return map;
+  }, [filteredCatalog]);
+
+  const visibleCategories = useMemo(() => {
+    return CATALOG_CATEGORIES.filter((cat) => {
+      if (!searchQuery) return true;
+      if (cat.id === 'rohre') return pipeMatchesSearch;
+      return (itemsByCategory[cat.id]?.length ?? 0) > 0;
+    });
+  }, [searchQuery, pipeMatchesSearch, itemsByCategory]);
+
+  const isCategoryOpen = (catId: string) => {
+    if (searchQuery) return true;
+    return openCategories[catId] ?? true;
+  };
 
   return (
     <div className="app-shell">
@@ -237,79 +316,132 @@ export function App() {
 
           <div className="panel-section">
             <div className="section-title">3. Bauteile (Drag &amp; Drop oder Klick)</div>
-            <input
-              className="search-box"
-              type="search"
-              placeholder="Bauteil suchen..."
-              value={catalogSearch}
-              onChange={(e) => setCatalogSearch(e.target.value)}
-            />
-
-            {/* Rohr-Element */}
-            <div
-              className="catalog-card pipe-card"
-              draggable
-              onDragStart={(e) =>
-                e.dataTransfer.setData(
-                  'application/x-gestell-item',
-                  JSON.stringify({ kind: 'pipe', diameterMm: selectedDiameter })
-                )
-              }
-              onClick={() => addFreePipe([-250, 20, 0], [250, 20, 0], selectedDiameter)}
-            >
-              <div className="pipe-badge">Ø {selectedDiameter}</div>
-              <div className="catalog-info">
-                <div className="catalog-name">Rundrohr (500 mm)</div>
-                <div className="catalog-sub">Ziehen oder Port-zu-Port klicken</div>
-              </div>
-            </div>
-
-            {/* Reduzier-Paar Auswahl */}
-            <div className="reducer-select-row">
-              <span>Adapter-Paar:</span>
-              <select
-                value={`${selectedReducerPair[0]}_${selectedReducerPair[1]}`}
-                onChange={(e) => {
-                  const [g, k] = e.target.value.split('_').map(Number);
-                  setSelectedReducerPair([g, k]);
-                }}
+            <div className="catalog-search-row">
+              <input
+                className="search-box"
+                type="search"
+                placeholder="Bauteil suchen..."
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+              />
+              <button
+                type="button"
+                className="category-toggle-all-btn"
+                onClick={toggleAllCategories}
+                title={allCategoriesOpen ? 'Alle Kategorien einklappen' : 'Alle Kategorien ausklappen'}
               >
-                {REDUCER_PAIRS.map(([g, k]) => (
-                  <option key={`${g}_${k}`} value={`${g}_${k}`}>
-                    {g} → {k} mm
-                  </option>
-                ))}
-              </select>
+                {allCategoriesOpen ? 'Alle einklappen' : 'Alle ausklappen'}
+              </button>
             </div>
 
-            <div className="catalog-list">
-              {filteredCatalog.map((item) => {
-                const variant = item.isReducer
-                  ? item.getVariant(selectedReducerPair[0], selectedReducerPair[1])
-                  : item.getVariant(selectedDiameter);
-                return (
-                  <div
-                    key={item.id}
-                    className="catalog-card"
-                    draggable
-                    onDragStart={(e) =>
-                      e.dataTransfer.setData(
-                        'application/x-gestell-item',
-                        JSON.stringify({ kind: 'node', catalogId: item.id, diameterMm: selectedDiameter })
-                      )
-                    }
-                    onClick={() => addNode(item.id, [0, 0, 0])}
-                    title={`${item.description} – In 3D-Szene ziehen oder klicken`}
-                  >
-                    <img src={variant.previewPath} alt={item.name} className="catalog-thumb" />
-                    <div className="catalog-info">
-                      <div className="catalog-name">{item.name}</div>
-                      <div className="catalog-sub">{variant.articleNumber}</div>
+            {visibleCategories.length === 0 ? (
+              <div className="category-empty-search">
+                Keine Bauteile für &quot;{catalogSearch}&quot; gefunden.
+              </div>
+            ) : (
+              <div className="category-accordion">
+                {visibleCategories.map((cat) => {
+                  const isOpen = isCategoryOpen(cat.id);
+                  const items = itemsByCategory[cat.id] || [];
+                  const isPipeCategory = cat.id === 'rohre';
+                  const count = isPipeCategory ? 1 : items.length;
+
+                  return (
+                    <div key={cat.id} className={`category-group ${isOpen ? 'is-open' : 'is-closed'}`}>
+                      <button
+                        type="button"
+                        className="category-header"
+                        onClick={() => toggleCategory(cat.id)}
+                        aria-expanded={isOpen}
+                        title={cat.description}
+                      >
+                        <span className="category-title-wrap">
+                          {isOpen ? (
+                            <ChevronDown size={14} className="cat-chevron" />
+                          ) : (
+                            <ChevronRight size={14} className="cat-chevron" />
+                          )}
+                          <span className="category-name">{cat.name}</span>
+                        </span>
+                        <span className="category-count-badge">{count}</span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="category-content">
+                          {isPipeCategory && (
+                            <div
+                              className="catalog-card pipe-card"
+                              draggable
+                              onDragStart={(e) =>
+                                e.dataTransfer.setData(
+                                  'application/x-gestell-item',
+                                  JSON.stringify({ kind: 'pipe', diameterMm: selectedDiameter })
+                                )
+                              }
+                              onClick={() => addFreePipe([-250, 20, 0], [250, 20, 0], selectedDiameter)}
+                            >
+                              <div className="pipe-badge">Ø {selectedDiameter}</div>
+                              <div className="catalog-info">
+                                <div className="catalog-name">Rundrohr (500 mm)</div>
+                                <div className="catalog-sub">Ziehen oder Port-zu-Port klicken</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {!isPipeCategory &&
+                            items.map((item) => {
+                              const variant = item.isReducer
+                                ? item.getVariant(selectedReducerPair[0], selectedReducerPair[1])
+                                : item.getVariant(selectedDiameter);
+
+                              return (
+                                <React.Fragment key={item.id}>
+                                  {item.isReducer && (
+                                    <div className="reducer-select-row">
+                                      <span>Adapter-Paar:</span>
+                                      <select
+                                        value={`${selectedReducerPair[0]}_${selectedReducerPair[1]}`}
+                                        onChange={(e) => {
+                                          const [g, k] = e.target.value.split('_').map(Number);
+                                          setSelectedReducerPair([g, k]);
+                                        }}
+                                      >
+                                        {REDUCER_PAIRS.map(([g, k]) => (
+                                          <option key={`${g}_${k}`} value={`${g}_${k}`}>
+                                            {g} → {k} mm
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                  <div
+                                    className="catalog-card"
+                                    draggable
+                                    onDragStart={(e) =>
+                                      e.dataTransfer.setData(
+                                        'application/x-gestell-item',
+                                        JSON.stringify({ kind: 'node', catalogId: item.id, diameterMm: selectedDiameter })
+                                      )
+                                    }
+                                    onClick={() => addNode(item.id, [0, 0, 0])}
+                                    title={`${item.description} – In 3D-Szene ziehen oder klicken`}
+                                  >
+                                    <img src={variant.previewPath} alt={item.name} className="catalog-thumb" />
+                                    <div className="catalog-info">
+                                      <div className="catalog-name">{item.name}</div>
+                                      <div className="catalog-sub">{variant.articleNumber}</div>
+                                    </div>
+                                  </div>
+                                </React.Fragment>
+                              );
+                            })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </aside>
 
