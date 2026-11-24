@@ -3,6 +3,7 @@ import {
   Box,
   ChevronDown,
   ChevronRight,
+  Compass,
   Download,
   FileArchive,
   FileText,
@@ -25,6 +26,7 @@ import {
 } from './data/catalog';
 import { useConfigStore } from './store/useConfigStore';
 import { SceneCanvas } from './components/SceneCanvas';
+import { ViewModal } from './components/ViewModal';
 import { buildBom, downloadZipBundle, generatePdfDoc } from './utils/exportPdfZip';
 import { computeFrameBounds, estimateFrameLoad, getPipeAxisLengthMm } from './utils/geometry';
 
@@ -50,6 +52,8 @@ export function App() {
   const setPendingPort = useConfigStore((s) => s.setPendingPort);
   const showDimensions = useConfigStore((s) => s.showDimensions);
   const setShowDimensions = useConfigStore((s) => s.setShowDimensions);
+  const setIsViewModalOpen = useConfigStore((s) => s.setIsViewModalOpen);
+  const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
 
   const addNode = useConfigStore((s) => s.addNode);
   const addFreePipe = useConfigStore((s) => s.addFreePipe);
@@ -228,6 +232,14 @@ export function App() {
         <div className="topbar-actions">
           <button className="btn btn-soft" onClick={loadDemoFrame} title="Beispiel-Gestell laden">
             <Sparkles size={15} /> Beispiel
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft"
+            onClick={() => setIsViewModalOpen(true)}
+            title="Ansichtswürfel &amp; Snap-in öffnen"
+          >
+            <Compass size={15} /> Ansicht
           </button>
           <button
             type="button"
@@ -462,6 +474,13 @@ export function App() {
             <span>
               Teile: <strong>{nodes.length} Verbinder</strong> · <strong>{pipes.length} Rohre</strong>
             </span>
+            <span
+              className="hud-snap-badge"
+              onClick={() => setIsViewModalOpen(true)}
+              title="Snap-in Entfernung einstellen (0 = Aus)"
+            >
+              Snap-in: <strong>{snapDistanceMm === 0 ? 'Aus' : `${snapDistanceMm} mm`}</strong>
+            </span>
             {pendingPort ? (
               <span className="hud-port-hint">
                 Port gewählt – zweiten Port anklicken zum Verbinden oder rechts Länge eingeben!
@@ -678,6 +697,9 @@ export function App() {
           )}
         </aside>
       </div>
+
+      {/* Modal: Ansicht & Snap-in */}
+      <ViewModal />
     </div>
   );
 }

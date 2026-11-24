@@ -76,6 +76,7 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
   const selectedType = useConfigStore((s) => s.selectedType);
   const selectItem = useConfigStore((s) => s.selectItem);
   const moveNode = useConfigStore((s) => s.moveNode);
+  const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
   const pendingPort = useConfigStore((s) => s.pendingPort);
   const setPendingPort = useConfigStore((s) => s.setPendingPort);
   const connectPorts = useConfigStore((s) => s.connectPorts);
@@ -154,14 +155,15 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
         <TransformControls
           object={groupRef.current}
           mode="translate"
+          translationSnap={snapDistanceMm > 0 ? snapDistanceMm : null}
           onMouseUp={() => {
             if (!groupRef.current) return;
             const p = groupRef.current.position;
-            moveNode(node.uid, [
-              Math.round(p.x / 10) * 10,
-              Math.max(0, Math.round(p.y / 10) * 10),
-              Math.round(p.z / 10) * 10,
-            ]);
+            const snap = snapDistanceMm;
+            const x = snap > 0 ? Math.round(p.x / snap) * snap : Math.round(p.x * 10) / 10;
+            const y = snap > 0 ? Math.max(0, Math.round(p.y / snap) * snap) : Math.max(0, Math.round(p.y * 10) / 10);
+            const z = snap > 0 ? Math.round(p.z / snap) * snap : Math.round(p.z * 10) / 10;
+            moveNode(node.uid, [x, y, z]);
           }}
         />
       </>
@@ -232,6 +234,7 @@ export const SceneCanvas: React.FC<{
   const selectItem = useConfigStore((s) => s.selectItem);
   const addNode = useConfigStore((s) => s.addNode);
   const addFreePipe = useConfigStore((s) => s.addFreePipe);
+  const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
 
@@ -253,8 +256,9 @@ export const SceneCanvas: React.FC<{
     const hit = new THREE.Vector3();
     raycaster.ray.intersectPlane(groundPlane, hit);
 
-    const x = Math.round(hit.x / 10) * 10;
-    const z = Math.round(hit.z / 10) * 10;
+    const snap = snapDistanceMm;
+    const x = snap > 0 ? Math.round(hit.x / snap) * snap : Math.round(hit.x * 10) / 10;
+    const z = snap > 0 ? Math.round(hit.z / snap) * snap : Math.round(hit.z * 10) / 10;
 
     if (payload.kind === 'node' && payload.catalogId) {
       addNode(payload.catalogId, [x, 0, z]);

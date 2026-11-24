@@ -1,4 +1,5 @@
 import React from 'react';
+import { Compass, RotateCcw } from 'lucide-react';
 import { CameraPreset, useConfigStore } from '../store/useConfigStore';
 
 const FACES: Array<{ preset: CameraPreset; label: string; title: string }> = [
@@ -11,27 +12,27 @@ const FACES: Array<{ preset: CameraPreset; label: string; title: string }> = [
 ];
 
 export const ViewCube: React.FC = () => {
+  const setIsViewModalOpen = useConfigStore((s) => s.setIsViewModalOpen);
   const triggerCamera = useConfigStore((s) => s.triggerCamera);
 
   return (
-    <div className="viewcube-panel" title="Kamera-Ansichten">
-      <div className="viewcube-header">
+    <div className="viewcube-trigger-wrap" title="Ansicht & Kamera-Einstellungen">
+      <button
+        type="button"
+        className="viewcube-trigger-btn"
+        onClick={() => setIsViewModalOpen(true)}
+      >
+        <Compass size={15} />
         <span>Ansicht</span>
-        <button className="vc-iso-btn" onClick={() => triggerCamera('iso')} title="3D Isometrisch">
-          3D
-        </button>
-      </div>
-      <div className="viewcube-grid">
-        <div />
-        <button className="vc-btn" onClick={() => triggerCamera('top')} title="Top">Oben</button>
-        <div />
-        <button className="vc-btn" onClick={() => triggerCamera('left')} title="Left">Links</button>
-        <button className="vc-btn vc-center" onClick={() => triggerCamera('front')} title="Front">Vorne</button>
-        <button className="vc-btn" onClick={() => triggerCamera('right')} title="Right">Rechts</button>
-        <button className="vc-btn" onClick={() => triggerCamera('back')} title="Back">Hinten</button>
-        <button className="vc-btn" onClick={() => triggerCamera('bottom')} title="Bottom">Unten</button>
-        <button className="vc-btn" onClick={() => triggerCamera('iso')} title="Iso">Iso</button>
-      </div>
+      </button>
+      <button
+        type="button"
+        className="viewcube-quick-iso"
+        onClick={() => triggerCamera('iso')}
+        title="3D Isometrisch"
+      >
+        <RotateCcw size={12} />
+      </button>
     </div>
   );
 };

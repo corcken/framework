@@ -22,6 +22,8 @@ interface ConfigState {
   selectedType: 'node' | 'pipe' | null;
   pendingPort: PendingPortRef | null;
   showDimensions: boolean;
+  isViewModalOpen: boolean;
+  snapDistanceMm: number;
   cameraPreset: CameraPreset;
   cameraTick: number;
 
@@ -31,6 +33,8 @@ interface ConfigState {
   setActivePartColor: (hex: string) => void;
   setActivePipeColor: (hex: string) => void;
   setShowDimensions: (v: boolean) => void;
+  setIsViewModalOpen: (v: boolean) => void;
+  setSnapDistanceMm: (d: number) => void;
   triggerCamera: (preset: CameraPreset) => void;
 
   selectItem: (uid: string | null, type: 'node' | 'pipe' | null) => void;
@@ -59,7 +63,8 @@ function nextUid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${uidCounter}`;
 }
 
-function snapGrid(v: number, step = 10): number {
+function snapCoord(v: number, step: number): number {
+  if (step <= 0) return Math.round(v * 10) / 10;
   return Math.round(v / step) * step;
 }
 
@@ -80,6 +85,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   selectedType: null,
   pendingPort: null,
   showDimensions: false,
+  isViewModalOpen: false,
+  snapDistanceMm: 10,
   cameraPreset: 'iso',
   cameraTick: 0,
 
@@ -89,6 +96,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   setActivePartColor: (hex) => set({ activePartColor: hex }),
   setActivePipeColor: (hex) => set({ activePipeColor: hex }),
   setShowDimensions: (v) => set({ showDimensions: v }),
+  setIsViewModalOpen: (v) => set({ isViewModalOpen: v }),
+  setSnapDistanceMm: (d) => set({ snapDistanceMm: Math.max(0, Math.round(d)) }),
   triggerCamera: (preset) => set((s) => ({ cameraPreset: preset, cameraTick: s.cameraTick + 1 })),
 
   selectItem: (uid, type) => set({ selectedUid: uid, selectedType: type }),
@@ -102,6 +111,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const d2 = secondDiameterMm ?? (item.isReducer ? state.selectedReducerPair[1] : undefined);
     const variant = item.getVariant(d, d2);
     const uid = nextUid('node');
+    const snap = state.snapDistanceMm;
 
     const newNode: PlacedNode = {
       uid,
@@ -109,7 +119,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       articleNumber: variant.articleNumber,
       diameterMm: d,
       secondDiameterMm: d2,
-      position: [snapGrid(position[0]), Math.max(0, snapGrid(position[1])), snapGrid(position[2])],
+      position: [snapCoord(position[0], snap), Math.max(0, snapCoord(position[1], snap)), snapCoord(position[2], snap)],
       rotationEuler: [0, 0, 0],
       color: state.activePartColor,
       stlPath: variant.stlPath,
