@@ -3,12 +3,12 @@ import {
   Box,
   ChevronDown,
   ChevronRight,
-  Compass,
   Download,
   FileArchive,
   FileText,
   FolderOpen,
   Layers,
+  Magnet,
   RotateCw,
   Ruler,
   Save,
@@ -26,7 +26,6 @@ import {
 } from './data/catalog';
 import { useConfigStore } from './store/useConfigStore';
 import { SceneCanvas } from './components/SceneCanvas';
-import { ViewModal } from './components/ViewModal';
 import { buildBom, downloadZipBundle, generatePdfDoc } from './utils/exportPdfZip';
 import { computeFrameBounds, estimateFrameLoad, getPipeAxisLengthMm } from './utils/geometry';
 
@@ -52,8 +51,8 @@ export function App() {
   const setPendingPort = useConfigStore((s) => s.setPendingPort);
   const showDimensions = useConfigStore((s) => s.showDimensions);
   const setShowDimensions = useConfigStore((s) => s.setShowDimensions);
-  const setIsViewModalOpen = useConfigStore((s) => s.setIsViewModalOpen);
   const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
+  const setSnapDistanceMm = useConfigStore((s) => s.setSnapDistanceMm);
 
   const addNode = useConfigStore((s) => s.addNode);
   const addFreePipe = useConfigStore((s) => s.addFreePipe);
@@ -233,14 +232,30 @@ export function App() {
           <button className="btn btn-soft" onClick={loadDemoFrame} title="Beispiel-Gestell laden">
             <Sparkles size={15} /> Beispiel
           </button>
-          <button
-            type="button"
-            className="btn btn-soft"
-            onClick={() => setIsViewModalOpen(true)}
-            title="Ansichtswürfel &amp; Snap-in öffnen"
+          <div
+            className="topbar-snap-control"
+            title="Snap-in Entfernung beim Platzieren und Verschieben (0 = Aus)"
           >
-            <Compass size={15} /> Ansicht
-          </button>
+            <Magnet size={14} className={snapDistanceMm > 0 ? 'snap-icon-on' : 'snap-icon-off'} />
+            <span className="snap-label">Snap-in:</span>
+            <input
+              type="range"
+              min={0}
+              max={50}
+              step={1}
+              value={snapDistanceMm}
+              onChange={(e) => setSnapDistanceMm(Number(e.target.value))}
+              className="topbar-snap-slider"
+            />
+            <button
+              type="button"
+              className={`snap-val-badge ${snapDistanceMm === 0 ? 'off' : 'on'}`}
+              onClick={() => setSnapDistanceMm(snapDistanceMm === 0 ? 10 : 0)}
+              title={snapDistanceMm === 0 ? 'Snap-in aktivieren (10 mm)' : 'Snap-in ausschalten (0)'}
+            >
+              {snapDistanceMm === 0 ? 'Aus' : `${snapDistanceMm} mm`}
+            </button>
+          </div>
           <button
             type="button"
             className={`btn ${showDimensions ? 'btn-active' : 'btn-soft'}`}
@@ -474,13 +489,6 @@ export function App() {
             <span>
               Teile: <strong>{nodes.length} Verbinder</strong> · <strong>{pipes.length} Rohre</strong>
             </span>
-            <span
-              className="hud-snap-badge"
-              onClick={() => setIsViewModalOpen(true)}
-              title="Snap-in Entfernung einstellen (0 = Aus)"
-            >
-              Snap-in: <strong>{snapDistanceMm === 0 ? 'Aus' : `${snapDistanceMm} mm`}</strong>
-            </span>
             {pendingPort ? (
               <span className="hud-port-hint">
                 Port gewählt – zweiten Port anklicken zum Verbinden oder rechts Länge eingeben!
@@ -697,9 +705,6 @@ export function App() {
           )}
         </aside>
       </div>
-
-      {/* Modal: Ansicht & Snap-in */}
-      <ViewModal />
     </div>
   );
 }

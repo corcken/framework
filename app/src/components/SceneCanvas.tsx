@@ -46,6 +46,15 @@ const CameraRig: React.FC = () => {
   const cameraPreset = useConfigStore((s) => s.cameraPreset);
   const cameraTick = useConfigStore((s) => s.cameraTick);
 
+  const syncViewCube = () => {
+    if (!controlsRef.current) return;
+    const offset = new THREE.Vector3().subVectors(camera.position, controlsRef.current.target);
+    const sph = new THREE.Spherical().setFromVector3(offset);
+    const rotY = -THREE.MathUtils.radToDeg(sph.theta);
+    const rotX = -(90 - THREE.MathUtils.radToDeg(sph.phi));
+    window.dispatchEvent(new CustomEvent('viewcube-sync', { detail: { rotX, rotY } }));
+  };
+
   useEffect(() => {
     if (cameraTick === 0) return;
     const dist = 950;
@@ -65,9 +74,37 @@ const CameraRig: React.FC = () => {
       controlsRef.current.target.copy(target);
       controlsRef.current.update();
     }
+    syncViewCube();
   }, [cameraPreset, cameraTick, camera]);
 
-  return <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />;
+  useEffect(() => {
+    const handleOrbit = (e: Event) => {
+      const { dTheta, dPhi } = (e as CustomEvent<{ dTheta: number; dPhi: number }>).detail;
+      if (!controlsRef.current) return;
+      const target = controlsRef.current.target;
+      const offset = new THREE.Vector3().subVectors(camera.position, target);
+      const sph = new THREE.Spherical().setFromVector3(offset);
+      sph.theta += dTheta;
+      sph.phi = THREE.MathUtils.clamp(sph.phi + dPhi, 0.01, Math.PI - 0.01);
+      offset.setFromSpherical(sph);
+      camera.position.copy(target).add(offset);
+      controlsRef.current.update();
+      syncViewCube();
+    };
+    window.addEventListener('viewcube-orbit', handleOrbit);
+    syncViewCube();
+    return () => window.removeEventListener('viewcube-orbit', handleOrbit);
+  }, [camera]);
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enableDamping
+      dampingFactor={0.08}
+      onChange={syncViewCube}
+    />
+  );
 };
 
 const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {

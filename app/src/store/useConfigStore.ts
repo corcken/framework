@@ -22,7 +22,6 @@ interface ConfigState {
   selectedType: 'node' | 'pipe' | null;
   pendingPort: PendingPortRef | null;
   showDimensions: boolean;
-  isViewModalOpen: boolean;
   snapDistanceMm: number;
   cameraPreset: CameraPreset;
   cameraTick: number;
@@ -33,7 +32,6 @@ interface ConfigState {
   setActivePartColor: (hex: string) => void;
   setActivePipeColor: (hex: string) => void;
   setShowDimensions: (v: boolean) => void;
-  setIsViewModalOpen: (v: boolean) => void;
   setSnapDistanceMm: (d: number) => void;
   triggerCamera: (preset: CameraPreset) => void;
 
@@ -85,7 +83,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   selectedType: null,
   pendingPort: null,
   showDimensions: false,
-  isViewModalOpen: false,
   snapDistanceMm: 10,
   cameraPreset: 'iso',
   cameraTick: 0,
@@ -96,7 +93,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   setActivePartColor: (hex) => set({ activePartColor: hex }),
   setActivePipeColor: (hex) => set({ activePipeColor: hex }),
   setShowDimensions: (v) => set({ showDimensions: v }),
-  setIsViewModalOpen: (v) => set({ isViewModalOpen: v }),
   setSnapDistanceMm: (d) => set({ snapDistanceMm: Math.max(0, Math.round(d)) }),
   triggerCamera: (preset) => set((s) => ({ cameraPreset: preset, cameraTick: s.cameraTick + 1 })),
 
