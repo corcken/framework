@@ -65,7 +65,7 @@ export function App() {
   const addNode = useConfigStore((s) => s.addNode);
   const addFreePipe = useConfigStore((s) => s.addFreePipe);
   const addPipeFromPort = useConfigStore((s) => s.addPipeFromPort);
-  const rotateNodeAxis = useConfigStore((s) => s.rotateNodeAxis);
+  const rotateSelectedAxis = useConfigStore((s) => s.rotateSelectedAxis);
   const setItemColor = useConfigStore((s) => s.setItemColor);
   const updatePipeLength = useConfigStore((s) => s.updatePipeLength);
   const dropSelectedToGround = useConfigStore((s) => s.dropSelectedToGround);
@@ -274,6 +274,40 @@ export function App() {
             {selectedNode?.locked ? <Lock size={15} /> : <Unlock size={15} />}
             <span>{selectedNode?.locked ? 'Gesperrt' : 'Sperren'}</span>
           </button>
+          <div
+            className={`topbar-rot-group ${!selectedUid || Boolean(selectedNode?.locked) ? 'is-disabled' : ''}`}
+            title="Ausgewähltes Element (Verbinder oder Rohr) um +90° drehen"
+          >
+            <RotateCw size={14} className={selectedUid && !selectedNode?.locked ? 'snap-icon-on' : 'snap-icon-off'} />
+            <span className="snap-label">Drehen:</span>
+            <button
+              type="button"
+              className="btn btn-soft btn-xs"
+              onClick={() => rotateSelectedAxis('x', 90)}
+              disabled={!selectedUid || Boolean(selectedNode?.locked)}
+              title="Um X-Achse +90° drehen"
+            >
+              X
+            </button>
+            <button
+              type="button"
+              className="btn btn-soft btn-xs"
+              onClick={() => rotateSelectedAxis('y', 90)}
+              disabled={!selectedUid || Boolean(selectedNode?.locked)}
+              title="Um Y-Achse +90° drehen"
+            >
+              Y
+            </button>
+            <button
+              type="button"
+              className="btn btn-soft btn-xs"
+              onClick={() => rotateSelectedAxis('z', 90)}
+              disabled={!selectedUid || Boolean(selectedNode?.locked)}
+              title="Um Z-Achse +90° drehen"
+            >
+              Z
+            </button>
+          </div>
           <button
             type="button"
             className="btn btn-soft"
@@ -539,19 +573,6 @@ export function App() {
                   <div className="prop-line">
                     <span>Position (mm):</span>
                     <code>{selectedNode.position.join(', ')}</code>
-                  </div>
-
-                  <div className="section-title" style={{ marginTop: 10 }}>Drehen (90°)</div>
-                  <div className="rot-grid">
-                    <button className="btn btn-soft" onClick={() => rotateNodeAxis(selectedNode.uid, 'x', 90)}>
-                      <RotateCw size={13} /> X +90°
-                    </button>
-                    <button className="btn btn-soft" onClick={() => rotateNodeAxis(selectedNode.uid, 'y', 90)}>
-                      <RotateCw size={13} /> Y +90°
-                    </button>
-                    <button className="btn btn-soft" onClick={() => rotateNodeAxis(selectedNode.uid, 'z', 90)}>
-                      <RotateCw size={13} /> Z +90°
-                    </button>
                   </div>
 
                   <div className="section-title" style={{ marginTop: 10 }}>Farbe ändern</div>

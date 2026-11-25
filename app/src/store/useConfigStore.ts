@@ -55,6 +55,8 @@ interface ConfigState {
   toggleLockSelected: () => void;
   togglePipeConnectionLock: (pipeUid: string, end: 'start' | 'end') => void;
   rotateNodeAxis: (uid: string, axis: 'x' | 'y' | 'z', deg: number) => void;
+  rotatePipeAxis: (uid: string, axis: 'x' | 'y' | 'z', deg: number) => void;
+  rotateSelectedAxis: (axis: 'x' | 'y' | 'z', deg: number) => void;
   setItemColor: (uid: string, type: 'node' | 'pipe', color: string) => void;
   deleteSelected: () => void;
 
@@ -78,6 +80,19 @@ function nextUid(prefix: string): string {
 function snapCoord(v: number, step: number): number {
   if (step <= 0) return Math.round(v * 10) / 10;
   return Math.round(v / step) * step;
+}
+
+function rotateVecAroundAxis(
+  v: [number, number, number],
+  axis: 'x' | 'y' | 'z',
+  rad: number
+): [number, number, number] {
+  const c = Math.cos(rad);
+  const s = Math.sin(rad);
+  const [x, y, z] = v;
+  if (axis === 'x') return [x, y * c - z * s, y * s + z * c];
+  if (axis === 'y') return [x * c + z * s, y, -x * s + z * c];
+  return [x * c - y * s, x * s + y * c, z];
 }
 
 function getConnectedComponent(
@@ -690,6 +705,74 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       });
       return { nodes: nextNodes, pipes: nextPipes };
     }),
+
+  rotatePipeAxis: (uid, axis, deg) =>
+    set((s) => {
+      const rad = (deg * Math.PI) / 180;
+      return {
+        pipes: s.pipes.map((p) => {
+          if (p.uid !== uid) return p;
+          const mid: [number, number, number] = [
+            (p.startPos[0] + p.endPos[0]) / 2,
+            (p.startPos[1] + p.endPos[1]) / 2,
+            (p.startPos[2] + p.endPos[2]) / 2,
+          ];
+          const relStart: [number, number, number] = [
+            p.startPos[0] - mid[0],
+            p.startPos[1] - mid[1],
+            p.startPos[2] - mid[2],
+          ];
+          const relEnd: [number, number, number] = [
+            p.endPos[0] - mid[0],
+            p.endPos[1] - mid[1],
+            p.endPos[2] - mid[2],
+          ];
+          const rotStart = rotateVecAroundAxis(relStart, axis, rad);
+          const rotEnd = rotateVecAroundAxis(relEnd, axis, rad);
+
+          let nextStart: [number, number, number] = [
+            Math.round((mid[0] + rotStart[0]) * 10) / 10,
+            Math.round((mid[1] + rotStart[1]) * 10) / 10,
+            Math.round((mid[2] + rotStart[2]) * 10) / 10,
+          ];
+          let nextEnd: [number, number, number] = [
+            Math.round((mid[0] + rotEnd[0]) * 10) / 10,
+            Math.round((mid[1] + rotEnd[1]) * 10) / 10,
+            Math.round((mid[2] + rotEnd[2]) * 10) / 10,
+          ];
+
+          const minY = Math.min(nextStart[1], nextEnd[1]);
+          if (minY < 0) {
+            nextStart = [nextStart[0], Math.round((nextStart[1] - minY) * 10) / 10, nextStart[2]];
+            nextEnd = [nextEnd[0], Math.round((nextEnd[1] - minY) * 10) / 10, nextEnd[2]];
+          }
+
+          return {
+            ...p,
+            startPos: nextStart,
+            endPos: nextEnd,
+            startNodeUid: undefined,
+            startPortId: undefined,
+            startLocked: undefined,
+            startInsertionMm: 0,
+            endNodeUid: undefined,
+            endPortId: undefined,
+            endLocked: undefined,
+            endInsertionMm: 0,
+          };
+        }),
+      };
+    }),
+
+  rotateSelectedAxis: (axis, deg) => {
+    const s = get();
+    if (!s.selectedUid || !s.selectedType) return;
+    if (s.selectedType === 'node') {
+      s.rotateNodeAxis(s.selectedUid, axis, deg);
+    } else if (s.selectedType === 'pipe') {
+      s.rotatePipeAxis(s.selectedUid, axis, deg);
+    }
+  },
 
   setItemColor: (uid, type, color) =>
     set((s) =>

@@ -88,6 +88,29 @@ html, body, #root {
   color: var(--text);
 }
 
+.topbar-rot-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 6px;
+  font-size: 0.78rem;
+  transition: opacity 0.15s ease;
+}
+
+.topbar-rot-group.is-disabled {
+  opacity: 0.55;
+}
+
+.btn-xs {
+  padding: 3px 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 5px;
+}
+
 .snap-icon-on {
   color: var(--accent);
 }
