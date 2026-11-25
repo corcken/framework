@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  ArrowDownToLine,
   Box,
   ChevronDown,
   ChevronRight,
@@ -60,6 +61,7 @@ export function App() {
   const rotateNodeAxis = useConfigStore((s) => s.rotateNodeAxis);
   const setItemColor = useConfigStore((s) => s.setItemColor);
   const updatePipeLength = useConfigStore((s) => s.updatePipeLength);
+  const dropSelectedToGround = useConfigStore((s) => s.dropSelectedToGround);
   const deleteSelected = useConfigStore((s) => s.deleteSelected);
   const loadDemoFrame = useConfigStore((s) => s.loadDemoFrame);
   const clearProject = useConfigStore((s) => s.clearProject);
@@ -267,6 +269,15 @@ export function App() {
             <span className={`toggle-pill ${showDimensions ? 'on' : 'off'}`}>
               {showDimensions ? 'An' : 'Aus'}
             </span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft"
+            onClick={dropSelectedToGround}
+            disabled={!selectedUid}
+            title="Ausgewähltes Objekt auf Höhe 0 (Boden) setzen"
+          >
+            <ArrowDownToLine size={15} /> Höhe 0
           </button>
           <button className="btn btn-soft" onClick={() => fileInputRef.current?.click()} title="Projekt-JSON laden">
             <FolderOpen size={15} /> Laden
@@ -573,7 +584,16 @@ export function App() {
                     ))}
                   </div>
 
-                  <button className="btn btn-danger" style={{ marginTop: 14, width: '100%' }} onClick={deleteSelected}>
+                  <button
+                    className="btn btn-soft"
+                    style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
+                    onClick={dropSelectedToGround}
+                    title="Verbinder auf Höhe Y = 0 setzen"
+                  >
+                    <ArrowDownToLine size={14} /> Auf Höhe 0 setzen
+                  </button>
+
+                  <button className="btn btn-danger" style={{ marginTop: 8, width: '100%' }} onClick={deleteSelected}>
                     <Trash2 size={14} /> Bauteil löschen
                   </button>
                 </div>
@@ -610,7 +630,16 @@ export function App() {
                     ))}
                   </div>
 
-                  <button className="btn btn-danger" style={{ marginTop: 14, width: '100%' }} onClick={deleteSelected}>
+                  <button
+                    className="btn btn-soft"
+                    style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
+                    onClick={dropSelectedToGround}
+                    title="Rohr auf Höhe Y = 0 setzen"
+                  >
+                    <ArrowDownToLine size={14} /> Auf Höhe 0 setzen
+                  </button>
+
+                  <button className="btn btn-danger" style={{ marginTop: 8, width: '100%' }} onClick={deleteSelected}>
                     <Trash2 size={14} /> Rohr löschen
                   </button>
                 </div>

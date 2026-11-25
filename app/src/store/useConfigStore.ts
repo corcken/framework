@@ -48,6 +48,8 @@ interface ConfigState {
 
   addNode: (catalogId: string, position: [number, number, number], diameterMm?: number, secondDiameterMm?: number) => string | null;
   moveNode: (uid: string, position: [number, number, number]) => void;
+  movePipe: (uid: string, newMid: [number, number, number]) => void;
+  dropSelectedToGround: () => void;
   rotateNodeAxis: (uid: string, axis: 'x' | 'y' | 'z', deg: number) => void;
   setItemColor: (uid: string, type: 'node' | 'pipe', color: string) => void;
   deleteSelected: () => void;
@@ -139,9 +141,286 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   moveNode: (uid, position) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) => (n.uid === uid ? { ...n, position } : n)),
-    })),
+    set((s) => {
+      const targetNode = s.nodes.find((n) => n.uid === uid);
+      if (!targetNode) return s;
+
+      let finalPos: [number, number, number] = [
+        Math.round(position[0] * 10) / 10,
+        Math.max(0, Math.round(position[1] * 10) / 10),
+        Math.round(position[2] * 10) / 10,
+      ];
+
+      const snapDist = s.snapDistanceMm;
+      if (snapDist > 0) {
+        const candidateNode: PlacedNode = { ...targetNode, position: finalPos };
+        let bestDist = snapDist;
+        let bestDelta: [number, number, number] | null = null;
+
+        // 1. Gegen Ports anderer Verbinder prüfen
+        for (const myPort of candidateNode.ports) {
+          const myWorld = getWorldPort(candidateNode, myPort).pos;
+          for (const other of s.nodes) {
+            if (other.uid === uid) continue;
+            for (const otherPort of other.ports) {
+              const otherWorld = getWorldPort(other, otherPort).pos;
+              const d = Math.hypot(
+                otherWorld[0] - myWorld[0],
+                otherWorld[1] - myWorld[1],
+                otherWorld[2] - myWorld[2]
+              );
+              if (d <= bestDist) {
+                bestDist = d;
+                bestDelta = [
+                  otherWorld[0] - myWorld[0],
+                  otherWorld[1] - myWorld[1],
+                  otherWorld[2] - myWorld[2],
+                ];
+              }
+            }
+          }
+
+          // 2. Gegen freie Rohrenden prüfen
+          for (const pipe of s.pipes) {
+            if (!pipe.startNodeUid) {
+              const dStart = Math.hypot(
+                pipe.startPos[0] - myWorld[0],
+                pipe.startPos[1] - myWorld[1],
+                pipe.startPos[2] - myWorld[2]
+              );
+              if (dStart <= bestDist) {
+                bestDist = dStart;
+                bestDelta = [
+                  pipe.startPos[0] - myWorld[0],
+                  pipe.startPos[1] - myWorld[1],
+                  pipe.startPos[2] - myWorld[2],
+                ];
+              }
+            }
+            if (!pipe.endNodeUid) {
+              const dEnd = Math.hypot(
+                pipe.endPos[0] - myWorld[0],
+                pipe.endPos[1] - myWorld[1],
+                pipe.endPos[2] - myWorld[2]
+              );
+              if (dEnd <= bestDist) {
+                bestDist = dEnd;
+                bestDelta = [
+                  pipe.endPos[0] - myWorld[0],
+                  pipe.endPos[1] - myWorld[1],
+                  pipe.endPos[2] - myWorld[2],
+                ];
+              }
+            }
+          }
+        }
+
+        if (bestDelta) {
+          finalPos = [
+            Math.round((finalPos[0] + bestDelta[0]) * 10) / 10,
+            Math.max(0, Math.round((finalPos[1] + bestDelta[1]) * 10) / 10),
+            Math.round((finalPos[2] + bestDelta[2]) * 10) / 10,
+          ];
+        }
+      }
+
+      const nextNodes = s.nodes.map((n) => (n.uid === uid ? { ...n, position: finalPos } : n));
+      const nodeMap = new Map(nextNodes.map((n) => [n.uid, n]));
+      const nextPipes = s.pipes.map((p) => {
+        let updated = { ...p };
+        if (p.startNodeUid === uid && p.startPortId) {
+          const n = nodeMap.get(uid);
+          const port = n?.ports.find((pt) => pt.id === p.startPortId);
+          if (n && port) updated.startPos = getWorldPort(n, port).pos;
+        }
+        if (p.endNodeUid === uid && p.endPortId) {
+          const n = nodeMap.get(uid);
+          const port = n?.ports.find((pt) => pt.id === p.endPortId);
+          if (n && port) updated.endPos = getWorldPort(n, port).pos;
+        }
+        return updated;
+      });
+      return { nodes: nextNodes, pipes: nextPipes };
+    }),
+
+  movePipe: (uid, newMid) =>
+    set((s) => {
+      const targetPipe = s.pipes.find((p) => p.uid === uid);
+      if (!targetPipe) return s;
+
+      const oldMid: [number, number, number] = [
+        (targetPipe.startPos[0] + targetPipe.endPos[0]) / 2,
+        (targetPipe.startPos[1] + targetPipe.endPos[1]) / 2,
+        (targetPipe.startPos[2] + targetPipe.endPos[2]) / 2,
+      ];
+      const delta: [number, number, number] = [
+        newMid[0] - oldMid[0],
+        newMid[1] - oldMid[1],
+        newMid[2] - oldMid[2],
+      ];
+
+      let nextStart: [number, number, number] = [
+        Math.round((targetPipe.startPos[0] + delta[0]) * 10) / 10,
+        Math.round((targetPipe.startPos[1] + delta[1]) * 10) / 10,
+        Math.round((targetPipe.startPos[2] + delta[2]) * 10) / 10,
+      ];
+      let nextEnd: [number, number, number] = [
+        Math.round((targetPipe.endPos[0] + delta[0]) * 10) / 10,
+        Math.round((targetPipe.endPos[1] + delta[1]) * 10) / 10,
+        Math.round((targetPipe.endPos[2] + delta[2]) * 10) / 10,
+      ];
+
+      let startNodeUid: string | undefined;
+      let startPortId: string | undefined;
+      let startInsertionMm = 0;
+      let endNodeUid: string | undefined;
+      let endPortId: string | undefined;
+      let endInsertionMm = 0;
+
+      const snapDist = s.snapDistanceMm;
+      if (snapDist > 0) {
+        let bestDist = snapDist;
+        let snapShift: [number, number, number] | null = null;
+        let snappedEnd: 'start' | 'end' | null = null;
+
+        for (const node of s.nodes) {
+          for (const port of node.ports) {
+            const worldPos = getWorldPort(node, port).pos;
+            const dStart = Math.hypot(
+              worldPos[0] - nextStart[0],
+              worldPos[1] - nextStart[1],
+              worldPos[2] - nextStart[2]
+            );
+            if (dStart <= bestDist) {
+              bestDist = dStart;
+              snappedEnd = 'start';
+              snapShift = [
+                worldPos[0] - nextStart[0],
+                worldPos[1] - nextStart[1],
+                worldPos[2] - nextStart[2],
+              ];
+            }
+            const dEnd = Math.hypot(
+              worldPos[0] - nextEnd[0],
+              worldPos[1] - nextEnd[1],
+              worldPos[2] - nextEnd[2]
+            );
+            if (dEnd <= bestDist) {
+              bestDist = dEnd;
+              snappedEnd = 'end';
+              snapShift = [
+                worldPos[0] - nextEnd[0],
+                worldPos[1] - nextEnd[1],
+                worldPos[2] - nextEnd[2],
+              ];
+            }
+          }
+        }
+
+        if (snapShift && snappedEnd) {
+          nextStart = [
+            Math.round((nextStart[0] + snapShift[0]) * 10) / 10,
+            Math.round((nextStart[1] + snapShift[1]) * 10) / 10,
+            Math.round((nextStart[2] + snapShift[2]) * 10) / 10,
+          ];
+          nextEnd = [
+            Math.round((nextEnd[0] + snapShift[0]) * 10) / 10,
+            Math.round((nextEnd[1] + snapShift[1]) * 10) / 10,
+            Math.round((nextEnd[2] + snapShift[2]) * 10) / 10,
+          ];
+        }
+
+        // Prüfe für beide Enden, ob sie auf einem Port liegen
+        for (const node of s.nodes) {
+          for (const port of node.ports) {
+            const worldPos = getWorldPort(node, port).pos;
+            if (
+              !startNodeUid &&
+              Math.hypot(worldPos[0] - nextStart[0], worldPos[1] - nextStart[1], worldPos[2] - nextStart[2]) < 1.5
+            ) {
+              startNodeUid = node.uid;
+              startPortId = port.id;
+              startInsertionMm = port.insertionDepthMm;
+            }
+            if (
+              !endNodeUid &&
+              Math.hypot(worldPos[0] - nextEnd[0], worldPos[1] - nextEnd[1], worldPos[2] - nextEnd[2]) < 1.5
+            ) {
+              endNodeUid = node.uid;
+              endPortId = port.id;
+              endInsertionMm = port.insertionDepthMm;
+            }
+          }
+        }
+      }
+
+      return {
+        pipes: s.pipes.map((p) =>
+          p.uid === uid
+            ? {
+                ...p,
+                startPos: nextStart,
+                endPos: nextEnd,
+                startNodeUid,
+                startPortId,
+                startInsertionMm,
+                endNodeUid,
+                endPortId,
+                endInsertionMm,
+              }
+            : p
+        ),
+      };
+    }),
+
+  dropSelectedToGround: () =>
+    set((s) => {
+      if (!s.selectedUid) return s;
+      if (s.selectedType === 'node') {
+        const uid = s.selectedUid;
+        const nextNodes = s.nodes.map((n) =>
+          n.uid === uid ? { ...n, position: [n.position[0], 0, n.position[2]] as [number, number, number] } : n
+        );
+        const nodeMap = new Map(nextNodes.map((n) => [n.uid, n]));
+        const nextPipes = s.pipes.map((p) => {
+          let updated = { ...p };
+          if (p.startNodeUid === uid && p.startPortId) {
+            const n = nodeMap.get(uid);
+            const port = n?.ports.find((pt) => pt.id === p.startPortId);
+            if (n && port) updated.startPos = getWorldPort(n, port).pos;
+          }
+          if (p.endNodeUid === uid && p.endPortId) {
+            const n = nodeMap.get(uid);
+            const port = n?.ports.find((pt) => pt.id === p.endPortId);
+            if (n && port) updated.endPos = getWorldPort(n, port).pos;
+          }
+          return updated;
+        });
+        return { nodes: nextNodes, pipes: nextPipes };
+      }
+
+      if (s.selectedType === 'pipe') {
+        const uid = s.selectedUid;
+        return {
+          pipes: s.pipes.map((p) => {
+            if (p.uid !== uid) return p;
+            const minY = Math.min(p.startPos[1], p.endPos[1]);
+            return {
+              ...p,
+              startPos: [p.startPos[0], Math.round((p.startPos[1] - minY) * 10) / 10, p.startPos[2]],
+              endPos: [p.endPos[0], Math.round((p.endPos[1] - minY) * 10) / 10, p.endPos[2]],
+              startNodeUid: undefined,
+              startPortId: undefined,
+              startInsertionMm: 0,
+              endNodeUid: undefined,
+              endPortId: undefined,
+              endInsertionMm: 0,
+            };
+          }),
+        };
+      }
+      return s;
+    }),
 
   rotateNodeAxis: (uid, axis, deg) =>
     set((s) => {

@@ -116,13 +116,12 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
   const selectedType = useConfigStore((s) => s.selectedType);
   const selectItem = useConfigStore((s) => s.selectItem);
   const moveNode = useConfigStore((s) => s.moveNode);
-  const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
   const pendingPort = useConfigStore((s) => s.pendingPort);
   const setPendingPort = useConfigStore((s) => s.setPendingPort);
   const connectPorts = useConfigStore((s) => s.connectPorts);
 
   const isSelected = selectedType === 'node' && selectedUid === node.uid;
-  const groupRef = useRef<THREE.Group>(null);
+  const [groupObj, setGroupObj] = useState<THREE.Group | null>(null);
 
   const handlePortClick = (e: any, portId: string) => {
     e.stopPropagation();
@@ -139,7 +138,7 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
 
   const content = (
     <group
-      ref={groupRef}
+      ref={setGroupObj}
       position={node.position}
       rotation={node.rotationEuler}
       onClick={(e) => {
@@ -188,22 +187,17 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
     </group>
   );
 
-  if (isSelected && groupRef.current) {
+  if (isSelected && groupObj) {
     return (
       <>
         {content}
         <TransformControls
-          object={groupRef.current}
+          object={groupObj}
           mode="translate"
-          translationSnap={snapDistanceMm > 0 ? snapDistanceMm : null}
           onMouseUp={() => {
-            if (!groupRef.current) return;
-            const p = groupRef.current.position;
-            const snap = snapDistanceMm;
-            const x = snap > 0 ? Math.round(p.x / snap) * snap : Math.round(p.x * 10) / 10;
-            const y = snap > 0 ? Math.max(0, Math.round(p.y / snap) * snap) : Math.max(0, Math.round(p.y * 10) / 10);
-            const z = snap > 0 ? Math.round(p.z / snap) * snap : Math.round(p.z * 10) / 10;
-            moveNode(node.uid, [x, y, z]);
+            if (!groupObj) return;
+            const p = groupObj.position;
+            moveNode(node.uid, [p.x, Math.max(0, p.y), p.z]);
           }}
         />
       </>
@@ -217,9 +211,11 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
   const selectedUid = useConfigStore((s) => s.selectedUid);
   const selectedType = useConfigStore((s) => s.selectedType);
   const selectItem = useConfigStore((s) => s.selectItem);
+  const movePipe = useConfigStore((s) => s.movePipe);
   const showDimensions = useConfigStore((s) => s.showDimensions);
 
   const isSelected = selectedType === 'pipe' && selectedUid === pipe.uid;
+  const [groupObj, setGroupObj] = useState<THREE.Group | null>(null);
 
   const { mid, quat, axisLen } = useMemo(() => {
     const start = new THREE.Vector3(...pipe.startPos);
@@ -236,8 +232,9 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
 
   const cutLen = getPipeCutLengthMm(pipe);
 
-  return (
+  const content = (
     <group
+      ref={setGroupObj}
       position={mid}
       quaternion={quat}
       onClick={(e) => {
@@ -264,6 +261,25 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
       )}
     </group>
   );
+
+  if (isSelected && groupObj) {
+    return (
+      <>
+        {content}
+        <TransformControls
+          object={groupObj}
+          mode="translate"
+          onMouseUp={() => {
+            if (!groupObj) return;
+            const p = groupObj.position;
+            movePipe(pipe.uid, [p.x, p.y, p.z]);
+          }}
+        />
+      </>
+    );
+  }
+
+  return content;
 };
 
 export const SceneCanvas: React.FC<{
