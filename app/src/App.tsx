@@ -258,7 +258,7 @@ export function App() {
             <input
               type="range"
               min={0}
-              max={50}
+              max={200}
               step={1}
               value={snapDistanceMm}
               onChange={(e) => setSnapDistanceMm(Number(e.target.value))}
