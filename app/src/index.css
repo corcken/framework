@@ -182,6 +182,18 @@ html, body, #root {
   justify-content: center;
 }
 
+.port-locks-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.port-locks-list .btn {
+  justify-content: center;
+  font-size: 0.74rem;
+  padding: 5px 6px;
+}
+
 .dim-label-stack {
   display: flex;
   flex-direction: column;

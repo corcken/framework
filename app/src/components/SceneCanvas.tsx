@@ -116,6 +116,8 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
   const selectedType = useConfigStore((s) => s.selectedType);
   const selectItem = useConfigStore((s) => s.selectItem);
   const moveNode = useConfigStore((s) => s.moveNode);
+  const pipes = useConfigStore((s) => s.pipes);
+  const togglePipeConnectionLock = useConfigStore((s) => s.togglePipeConnectionLock);
   const pendingPort = useConfigStore((s) => s.pendingPort);
   const setPendingPort = useConfigStore((s) => s.setPendingPort);
   const connectPorts = useConfigStore((s) => s.connectPorts);
@@ -163,25 +165,59 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
         </mesh>
       )}
 
-      {/* Klickbare Snap-Ports */}
+      {/* Klickbare Snap-Ports + Schloss an angeschlossenen Verbinder-Ports */}
       {node.ports.map((port) => {
         const isPending = pendingPort?.nodeUid === node.uid && pendingPort?.portId === port.id;
         const px = port.localPos[0] + port.localDir[0] * (node.diameterMm * 0.75);
         const py = port.localPos[1] + port.localDir[1] * (node.diameterMm * 0.75);
         const pz = port.localPos[2] + port.localDir[2] * (node.diameterMm * 0.75);
+
+        const connPipeStart = pipes.find((p) => p.startNodeUid === node.uid && p.startPortId === port.id);
+        const connPipeEnd = pipes.find((p) => p.endNodeUid === node.uid && p.endPortId === port.id);
+        const connPipe = connPipeStart || connPipeEnd;
+        const connEnd: 'start' | 'end' = connPipeStart ? 'start' : 'end';
+        const isConnLocked = connPipe
+          ? connEnd === 'start'
+            ? connPipe.startLocked !== false
+            : connPipe.endLocked !== false
+          : false;
+        const lx = port.localPos[0] + port.localDir[0] * (node.diameterMm * 1.15 + 14);
+        const ly = port.localPos[1] + port.localDir[1] * (node.diameterMm * 1.15 + 14);
+        const lz = port.localPos[2] + port.localDir[2] * (node.diameterMm * 1.15 + 14);
+
         return (
-          <mesh
-            key={port.id}
-            position={[px, py, pz]}
-            onClick={(e) => handlePortClick(e, port.id)}
-          >
-            <sphereGeometry args={[Math.max(5, node.diameterMm * 0.22), 14, 14]} />
-            <meshStandardMaterial
-              color={isPending ? '#16a34a' : '#0284c7'}
-              emissive={isPending ? '#16a34a' : '#0284c7'}
-              emissiveIntensity={0.35}
-            />
-          </mesh>
+          <React.Fragment key={port.id}>
+            <mesh
+              position={[px, py, pz]}
+              onClick={(e) => handlePortClick(e, port.id)}
+            >
+              <sphereGeometry args={[Math.max(5, node.diameterMm * 0.22), 14, 14]} />
+              <meshStandardMaterial
+                color={isPending ? '#16a34a' : '#0284c7'}
+                emissive={isPending ? '#16a34a' : '#0284c7'}
+                emissiveIntensity={0.35}
+              />
+            </mesh>
+            {connPipe && (
+              <Html center position={[lx, ly, lz]} distanceFactor={950}>
+                <button
+                  type="button"
+                  className={`conn-lock-btn ${isConnLocked ? 'locked' : 'unlocked'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePipeConnectionLock(connPipe.uid, connEnd);
+                  }}
+                  title={
+                    isConnLocked
+                      ? `Anschluss ${port.label} gesperrt (klicken zum Öffnen / unabhängig verschieben)`
+                      : `Anschluss ${port.label} entsperrt (klicken zum Sperren / gemeinsam verschieben)`
+                  }
+                >
+                  {isConnLocked ? '🔒' : '🔓'}
+                </button>
+              </Html>
+            )}
+          </React.Fragment>
         );
       })}
       {/* Lock-Anzeige */}
@@ -218,7 +254,6 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
   const selectedType = useConfigStore((s) => s.selectedType);
   const selectItem = useConfigStore((s) => s.selectItem);
   const movePipe = useConfigStore((s) => s.movePipe);
-  const togglePipeConnectionLock = useConfigStore((s) => s.togglePipeConnectionLock);
   const showDimensions = useConfigStore((s) => s.showDimensions);
 
   const isSelected = selectedType === 'pipe' && selectedUid === pipe.uid;
@@ -259,71 +294,17 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
           emissiveIntensity={isSelected ? 0.3 : 0}
         />
       </mesh>
-      {/* Schloss pro Anschlusspunkt (Start / Ende) */}
-      {pipe.startNodeUid && (
-        <Html
-          center
-          position={[0, -axisLen / 2 + Math.min(34, axisLen * 0.22), 0]}
-          distanceFactor={950}
-        >
-          <button
-            type="button"
-            className={`conn-lock-btn ${pipe.startLocked === false ? 'unlocked' : 'locked'}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePipeConnectionLock(pipe.uid, 'start');
-            }}
-            title={
-              pipe.startLocked === false
-                ? 'Anschluss entsperrt (klicken zum Sperren / gemeinsam verschieben)'
-                : 'Anschluss gesperrt (klicken zum Öffnen / unabhängig verschieben)'
-            }
-          >
-            {pipe.startLocked === false ? '🔓' : '🔒'}
-          </button>
-        </Html>
-      )}
-
-      {pipe.endNodeUid && (
-        <Html
-          center
-          position={[0, axisLen / 2 - Math.min(34, axisLen * 0.22), 0]}
-          distanceFactor={950}
-        >
-          <button
-            type="button"
-            className={`conn-lock-btn ${pipe.endLocked === false ? 'unlocked' : 'locked'}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePipeConnectionLock(pipe.uid, 'end');
-            }}
-            title={
-              pipe.endLocked === false
-                ? 'Anschluss entsperrt (klicken zum Sperren / gemeinsam verschieben)'
-                : 'Anschluss gesperrt (klicken zum Öffnen / unabhängig verschieben)'
-            }
-          >
-            {pipe.endLocked === false ? '🔓' : '🔒'}
-          </button>
-        </Html>
-      )}
-
-      {(showDimensions || pipe.locked) && (
+      {showDimensions && (
         <Html center distanceFactor={950} style={{ pointerEvents: 'none' }}>
-          <div className="dim-label-stack">
-            {pipe.locked && <div className="lock-badge" title="Gesperrt">🔒</div>}
-            {showDimensions && (
-              <div className="dim-label">
-                Ø{pipe.diameterMm} · {cutLen} mm
-              </div>
-            )}
+          <div className="dim-label">
+            Ø{pipe.diameterMm} · {cutLen} mm
           </div>
         </Html>
       )}
     </group>
   );
 
-  if (isSelected && !pipe.locked && groupObj) {
+  if (isSelected && groupObj) {
     return (
       <>
         {content}

@@ -119,7 +119,6 @@ export function App() {
 
   const selectedNode = selectedType === 'node' ? nodes.find((n) => n.uid === selectedUid) : undefined;
   const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.uid === selectedUid) : undefined;
-  const isSelectedLocked = Boolean(selectedNode?.locked || selectedPipe?.locked);
   const showRightSidebar = Boolean(selectedNode || selectedPipe || pendingPort);
 
   const { nodeRows, pipeRows } = buildBom(nodes, pipes);
@@ -303,19 +302,19 @@ export function App() {
           </button>
           <button
             type="button"
-            className={`btn ${isSelectedLocked ? 'btn-warn-active' : 'btn-soft'}`}
+            className={`btn ${selectedNode?.locked ? 'btn-warn-active' : 'btn-soft'}`}
             onClick={toggleLockSelected}
-            disabled={!selectedUid}
-            title={isSelectedLocked ? 'Objekt entsperren' : 'Ausgewähltes Objekt sperren (Lock)'}
+            disabled={!selectedNode}
+            title={selectedNode?.locked ? 'Verbinder entsperren' : 'Ausgewählten Verbinder sperren (Lock)'}
           >
-            {isSelectedLocked ? <Lock size={15} /> : <Unlock size={15} />}
-            <span>{isSelectedLocked ? 'Gesperrt' : 'Sperren'}</span>
+            {selectedNode?.locked ? <Lock size={15} /> : <Unlock size={15} />}
+            <span>{selectedNode?.locked ? 'Gesperrt' : 'Sperren'}</span>
           </button>
           <button
             type="button"
             className="btn btn-soft"
             onClick={dropSelectedToGround}
-            disabled={!selectedUid || isSelectedLocked}
+            disabled={!selectedUid || Boolean(selectedNode?.locked)}
             title="Ausgewähltes Objekt auf Höhe 0 (Boden) setzen"
           >
             <ArrowDownToLine size={15} /> Höhe 0
@@ -617,6 +616,46 @@ export function App() {
                     ))}
                   </div>
 
+                  {/* Anschlusspunkte des Verbinders */}
+                  {(() => {
+                    const portLocks = selectedNode.ports
+                      .map((port) => {
+                        const sPipe = pipes.find((p) => p.startNodeUid === selectedNode.uid && p.startPortId === port.id);
+                        const ePipe = pipes.find((p) => p.endNodeUid === selectedNode.uid && p.endPortId === port.id);
+                        const connPipe = sPipe || ePipe;
+                        if (!connPipe) return null;
+                        const end: 'start' | 'end' = sPipe ? 'start' : 'end';
+                        const isLocked = end === 'start' ? connPipe.startLocked !== false : connPipe.endLocked !== false;
+                        return { port, connPipe, end, isLocked };
+                      })
+                      .filter(Boolean) as Array<{
+                      port: typeof selectedNode.ports[number];
+                      connPipe: typeof pipes[number];
+                      end: 'start' | 'end';
+                      isLocked: boolean;
+                    }>;
+                    if (portLocks.length === 0) return null;
+                    return (
+                      <div style={{ marginTop: 12 }}>
+                        <div className="section-title">Anschlusspunkte (Schlösser)</div>
+                        <div className="port-locks-list">
+                          {portLocks.map(({ port, connPipe, end, isLocked }) => (
+                            <button
+                              key={`${connPipe.uid}_${end}`}
+                              type="button"
+                              className={`btn ${isLocked ? 'btn-warn-active' : 'btn-soft'}`}
+                              onClick={() => togglePipeConnectionLock(connPipe.uid, end)}
+                              title={isLocked ? 'Anschluss öffnen' : 'Anschluss schließen'}
+                            >
+                              {isLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                              <span>Port {port.label}: {isLocked ? 'Zu' : 'Offen'}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="inline-btn-row" style={{ marginTop: 12 }}>
                     <button
                       className={`btn ${selectedNode.locked ? 'btn-warn-active' : 'btn-soft'}`}
@@ -678,60 +717,19 @@ export function App() {
                     ))}
                   </div>
 
-                  {(selectedPipe.startNodeUid || selectedPipe.endNodeUid) && (
-                    <div style={{ marginTop: 12 }}>
-                      <div className="section-title">Anschlusspunkte (Schlösser)</div>
-                      <div className="inline-btn-row">
-                        {selectedPipe.startNodeUid && (
-                          <button
-                            type="button"
-                            className={`btn ${selectedPipe.startLocked === false ? 'btn-soft' : 'btn-warn-active'}`}
-                            onClick={() => togglePipeConnectionLock(selectedPipe.uid, 'start')}
-                            title="Start-Anschluss sperren/entsperren"
-                          >
-                            {selectedPipe.startLocked === false ? <Unlock size={13} /> : <Lock size={13} />}
-                            Start {selectedPipe.startLocked === false ? 'Offen' : 'Zu'}
-                          </button>
-                        )}
-                        {selectedPipe.endNodeUid && (
-                          <button
-                            type="button"
-                            className={`btn ${selectedPipe.endLocked === false ? 'btn-soft' : 'btn-warn-active'}`}
-                            onClick={() => togglePipeConnectionLock(selectedPipe.uid, 'end')}
-                            title="End-Anschluss sperren/entsperren"
-                          >
-                            {selectedPipe.endLocked === false ? <Unlock size={13} /> : <Lock size={13} />}
-                            Ende {selectedPipe.endLocked === false ? 'Offen' : 'Zu'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="inline-btn-row" style={{ marginTop: 12 }}>
-                    <button
-                      className={`btn ${selectedPipe.locked ? 'btn-warn-active' : 'btn-soft'}`}
-                      onClick={toggleLockSelected}
-                      title={selectedPipe.locked ? 'Rohr entsperren' : 'Rohr sperren'}
-                    >
-                      {selectedPipe.locked ? <Lock size={14} /> : <Unlock size={14} />}
-                      {selectedPipe.locked ? 'Gesperrt' : 'Sperren'}
-                    </button>
-                    <button
-                      className="btn btn-soft"
-                      onClick={dropSelectedToGround}
-                      disabled={selectedPipe.locked}
-                      title="Rohr auf Höhe Y = 0 setzen"
-                    >
-                      <ArrowDownToLine size={14} /> Höhe 0
-                    </button>
-                  </div>
+                  <button
+                    className="btn btn-soft"
+                    style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
+                    onClick={dropSelectedToGround}
+                    title="Rohr auf Höhe Y = 0 setzen"
+                  >
+                    <ArrowDownToLine size={14} /> Auf Höhe 0 setzen
+                  </button>
 
                   <button
                     className="btn btn-danger"
                     style={{ marginTop: 8, width: '100%' }}
                     onClick={deleteSelected}
-                    disabled={selectedPipe.locked}
                   >
                     <Trash2 size={14} /> Rohr löschen
                   </button>
