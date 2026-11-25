@@ -110,6 +110,46 @@ const CameraRig: React.FC = () => {
   );
 };
 
+const thickLineGeom = new THREE.CylinderGeometry(0.022, 0.022, 0.5, 12);
+thickLineGeom.translate(0, 0.25, 0);
+
+const StyledTransformControls: React.FC<{
+  object: THREE.Object3D;
+  onMouseUp: () => void;
+}> = ({ object, onMouseUp }) => {
+  const controlsRef = useRef<any>(null);
+
+  useEffect(() => {
+    const ctrl = controlsRef.current;
+    if (!ctrl) return;
+    const translateGizmo = ctrl._gizmo?.gizmo?.translate;
+    if (!translateGizmo) return;
+    translateGizmo.traverse((obj: any) => {
+      if (!obj.isMesh) return;
+      if (obj.name === 'X' || obj.name === 'Y' || obj.name === 'Z') {
+        const params = obj.geometry?.parameters;
+        if (params && params.radiusTop === 0.0075) {
+          // Dünnen 3-eckigen Schaft durch volleren, runden Zylinder ersetzen
+          obj.geometry = thickLineGeom;
+        } else if (params && params.radiusTop === 0) {
+          // Pfeilspitzen etwas kompakter machen
+          obj.scale.set(0.82, 0.82, 0.82);
+        }
+      }
+    });
+  }, [object]);
+
+  return (
+    <TransformControls
+      ref={controlsRef}
+      object={object}
+      mode="translate"
+      size={0.62}
+      onMouseUp={onMouseUp}
+    />
+  );
+};
+
 const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
   const geom = useStlGeometry(node.stlPath);
   const selectedUid = useConfigStore((s) => s.selectedUid);
@@ -233,9 +273,8 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
     return (
       <>
         {content}
-        <TransformControls
+        <StyledTransformControls
           object={groupObj}
-          mode="translate"
           onMouseUp={() => {
             if (!groupObj) return;
             const p = groupObj.position;
@@ -308,9 +347,8 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
     return (
       <>
         {content}
-        <TransformControls
+        <StyledTransformControls
           object={groupObj}
-          mode="translate"
           onMouseUp={() => {
             if (!groupObj) return;
             const p = groupObj.position;

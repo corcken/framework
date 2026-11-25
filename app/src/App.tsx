@@ -11,10 +11,14 @@ import {
   Layers,
   Lock,
   Magnet,
+  Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   RotateCw,
   Ruler,
   Save,
   ShieldAlert,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Unlock,
@@ -75,16 +79,22 @@ export function App() {
 
   const [portPipeLen, setPortPipeLen] = useState(400);
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [infoModal, setInfoModal] = useState<'bom' | 'statics' | null>(null);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [headerMenuTab, setHeaderMenuTab] = useState<'bom' | 'statics'>('bom');
+  const [colorsModalOpen, setColorsModalOpen] = useState(false);
   const [busyZip, setBusyZip] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && infoModal) setInfoModal(null);
+      if (e.key === 'Escape') {
+        if (colorsModalOpen) setColorsModalOpen(false);
+        else if (headerMenuOpen) setHeaderMenuOpen(false);
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [infoModal]);
+  }, [colorsModalOpen, headerMenuOpen]);
 
   // Zustand für ausklappbare Kategorien (standardmäßig alle geöffnet)
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
@@ -235,70 +245,24 @@ export function App() {
             placeholder="Projektname..."
             title="Projektname für PDF-Kopf"
           />
-          <input
-            className="meta-input meta-author"
-            value={meta.author}
-            onChange={(e) => setMeta({ author: e.target.value })}
-            placeholder="Autor (optional)"
-            title="Autor für PDF-Kopf"
-          />
         </div>
 
         <div className="topbar-actions">
           <button className="btn btn-soft" onClick={loadDemoFrame} title="Beispiel-Gestell laden">
             <Sparkles size={15} /> Beispiel
           </button>
-          <div
-            className="topbar-snap-control"
-            title="Snap-in Entfernung beim Platzieren und Verschieben (0 = Aus)"
-          >
-            <Magnet size={14} className={snapDistanceMm > 0 ? 'snap-icon-on' : 'snap-icon-off'} />
-            <span className="snap-label">Snap-in:</span>
-            <input
-              type="range"
-              min={0}
-              max={200}
-              step={1}
-              value={snapDistanceMm}
-              onChange={(e) => setSnapDistanceMm(Number(e.target.value))}
-              className="topbar-snap-slider"
-            />
-            <button
-              type="button"
-              className={`snap-val-badge ${snapDistanceMm === 0 ? 'off' : 'on'}`}
-              onClick={() => setSnapDistanceMm(snapDistanceMm === 0 ? 10 : 0)}
-              title={snapDistanceMm === 0 ? 'Snap-in aktivieren (10 mm)' : 'Snap-in ausschalten (0)'}
-            >
-              {snapDistanceMm === 0 ? 'Aus' : `${snapDistanceMm} mm`}
-            </button>
-          </div>
           <button
             type="button"
-            className={`btn ${showDimensions ? 'btn-active' : 'btn-soft'}`}
-            onClick={() => setShowDimensions(!showDimensions)}
-            title={`Rohrbemaßung in 3D-Ansicht ${showDimensions ? 'ausschalten' : 'einschalten'}`}
+            className="btn btn-soft"
+            onClick={() => setColorsModalOpen(true)}
+            title="Standardfarben für Verbinder und Rohre wählen"
           >
-            <Ruler size={15} />
-            <span>Rohrbemaßung</span>
-            <span className={`toggle-pill ${showDimensions ? 'on' : 'off'}`}>
-              {showDimensions ? 'An' : 'Aus'}
+            <Palette size={15} />
+            <span>Farben</span>
+            <span className="header-color-dots">
+              <span className="header-dot" style={{ background: activePartColor }} />
+              <span className="header-dot" style={{ background: activePipeColor }} />
             </span>
-          </button>
-          <button
-            type="button"
-            className="btn btn-soft"
-            onClick={() => setInfoModal('bom')}
-            title="Stückliste anzeigen"
-          >
-            <Download size={15} /> Stückliste
-          </button>
-          <button
-            type="button"
-            className="btn btn-soft"
-            onClick={() => setInfoModal('statics')}
-            title="Statik &amp; Belastbarkeit anzeigen"
-          >
-            <ShieldAlert size={15} /> Statik
           </button>
           <button
             type="button"
@@ -319,34 +283,52 @@ export function App() {
           >
             <ArrowDownToLine size={15} /> Höhe 0
           </button>
-          <button className="btn btn-soft" onClick={() => fileInputRef.current?.click()} title="Projekt-JSON laden">
-            <FolderOpen size={15} /> Laden
-          </button>
-          <input ref={fileInputRef} type="file" accept=".json" hidden onChange={handleUploadJson} />
-          <button className="btn btn-soft" onClick={handleSaveJson} title="Projekt als JSON speichern">
-            <Save size={15} /> Speichern
-          </button>
-          <button className="btn btn-primary" onClick={handleExportPdf} title="Bemaßungszeichnung + Stückliste als PDF">
-            <FileText size={15} /> PDF
-          </button>
           <button
-            className="btn btn-success"
-            onClick={handleExportZip}
-            disabled={busyZip}
-            title="PDF + Stückliste + verwendete STLs als ZIP"
+            type="button"
+            className={`btn ${headerMenuOpen ? 'btn-active' : 'btn-primary'}`}
+            onClick={() => setHeaderMenuOpen(!headerMenuOpen)}
+            title="Statik, Stückliste, Rohrbemaßung, Snap-in, Laden/Speichern & Export"
           >
-            <FileArchive size={15} /> {busyZip ? 'Packe ZIP...' : 'ZIP (inkl. STLs)'}
+            <SlidersHorizontal size={15} />
+            <span>Projekt &amp; Auswertung</span>
+            <ChevronDown size={14} className={headerMenuOpen ? 'rot-180' : ''} />
           </button>
           <button className="btn btn-danger-ghost" onClick={clearProject} title="Szene leeren">
             <Trash2 size={15} />
           </button>
+          <input ref={fileInputRef} type="file" accept=".json" hidden onChange={handleUploadJson} />
         </div>
       </header>
 
-      {/* Hauptbereich */}
-      <div className={`workspace ${showRightSidebar ? '' : 'no-right-sidebar'}`}>
-        {/* Linke Sidebar: Katalog */}
-        <aside className="sidebar-left">
+      {/* Hauptbereich (Canvas immer 100%, Sidebars schweben darüber) */}
+      <div className="workspace">
+        {/* Button zum Wiedereinblenden der linken Sidebar */}
+        {!leftSidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-left-open-btn"
+            onClick={() => setLeftSidebarOpen(true)}
+            title="Bauteil-Katalog ausklappen"
+          >
+            <PanelLeftOpen size={16} />
+            <span>Bauteile</span>
+          </button>
+        )}
+
+        {/* Linke Sidebar: Katalog (schwebt über dem Canvas, 1,5x Breite = 435px) */}
+        <aside className={`sidebar-left ${leftSidebarOpen ? 'is-open' : 'is-collapsed'}`}>
+          <div className="sidebar-left-header">
+            <span className="sidebar-left-title">Bauteil-Katalog</span>
+            <button
+              type="button"
+              className="sidebar-collapse-btn"
+              onClick={() => setLeftSidebarOpen(false)}
+              title="Sidebar einklappen"
+            >
+              <PanelLeftClose size={16} />
+            </button>
+          </div>
+
           <div className="panel-section">
             <div className="section-title">1. Rohr-Durchmesser (mixbar)</div>
             <div className="dia-pills">
@@ -366,39 +348,7 @@ export function App() {
           </div>
 
           <div className="panel-section">
-            <div className="section-title">2. Farben</div>
-            <div className="color-row">
-              <span>Verbinder:</span>
-              <div className="swatches">
-                {PART_COLORS.map((c) => (
-                  <button
-                    key={c.hex}
-                    className={`swatch ${activePartColor === c.hex ? 'active' : ''}`}
-                    style={{ background: c.hex }}
-                    title={c.name}
-                    onClick={() => setActivePartColor(c.hex)}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="color-row">
-              <span>Rohre:</span>
-              <div className="swatches">
-                {PIPE_COLORS.map((c) => (
-                  <button
-                    key={c.hex}
-                    className={`swatch ${activePipeColor === c.hex ? 'active' : ''}`}
-                    style={{ background: c.hex }}
-                    title={c.name}
-                    onClick={() => setActivePipeColor(c.hex)}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="panel-section">
-            <div className="section-title">3. Bauteile (Drag &amp; Drop oder Klick)</div>
+            <div className="section-title">2. Bauteile (Drag &amp; Drop oder Klick)</div>
             <div className="catalog-search-row">
               <input
                 className="search-box"
@@ -740,96 +690,160 @@ export function App() {
         )}
       </div>
 
-      {/* Modal: Stückliste / Statik */}
-      {infoModal && (
-        <div className="info-modal-backdrop" onClick={() => setInfoModal(null)}>
-          <div className="info-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="info-modal-header">
-              <div className="info-modal-tabs">
+      {/* Header-Dropdown-Modal (Breite = Header minus Linke Sidebar) */}
+      {headerMenuOpen && (
+        <div className="header-panel-backdrop" onClick={() => setHeaderMenuOpen(false)}>
+          <div className="header-panel-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="header-panel-toolbar">
+              <div className="header-panel-controls">
                 <button
                   type="button"
-                  className={`btn ${infoModal === 'bom' ? 'btn-primary' : 'btn-soft'}`}
-                  onClick={() => setInfoModal('bom')}
+                  className={`btn ${showDimensions ? 'btn-active' : 'btn-soft'}`}
+                  onClick={() => setShowDimensions(!showDimensions)}
+                  title={`Rohrbemaßung in 3D-Ansicht ${showDimensions ? 'ausschalten' : 'einschalten'}`}
                 >
-                  <Download size={14} /> Stückliste
+                  <Ruler size={15} />
+                  <span>Rohrbemaßung</span>
+                  <span className={`toggle-pill ${showDimensions ? 'on' : 'off'}`}>
+                    {showDimensions ? 'An' : 'Aus'}
+                  </span>
+                </button>
+
+                <div
+                  className="topbar-snap-control"
+                  title="Snap-in Entfernung beim Platzieren und Verschieben (0 = Aus)"
+                >
+                  <Magnet size={14} className={snapDistanceMm > 0 ? 'snap-icon-on' : 'snap-icon-off'} />
+                  <span className="snap-label">Snap-in:</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={snapDistanceMm}
+                    onChange={(e) => setSnapDistanceMm(Number(e.target.value))}
+                    className="topbar-snap-slider"
+                  />
+                  <button
+                    type="button"
+                    className={`snap-val-badge ${snapDistanceMm === 0 ? 'off' : 'on'}`}
+                    onClick={() => setSnapDistanceMm(snapDistanceMm === 0 ? 10 : 0)}
+                    title={snapDistanceMm === 0 ? 'Snap-in aktivieren (10 mm)' : 'Snap-in ausschalten (0)'}
+                  >
+                    {snapDistanceMm === 0 ? 'Aus' : `${snapDistanceMm} mm`}
+                  </button>
+                </div>
+              </div>
+
+              <div className="header-panel-exports">
+                <button className="btn btn-soft" onClick={() => fileInputRef.current?.click()} title="Projekt-JSON laden">
+                  <FolderOpen size={15} /> Laden
+                </button>
+                <button className="btn btn-soft" onClick={handleSaveJson} title="Projekt als JSON speichern">
+                  <Save size={15} /> Speichern
+                </button>
+                <button className="btn btn-primary" onClick={handleExportPdf} title="Bemaßungszeichnung + Stückliste als PDF">
+                  <FileText size={15} /> PDF
+                </button>
+                <button
+                  className="btn btn-success"
+                  onClick={handleExportZip}
+                  disabled={busyZip}
+                  title="PDF + Stückliste + verwendete STLs als ZIP"
+                >
+                  <FileArchive size={15} /> {busyZip ? 'Packe ZIP...' : 'ZIP (inkl. STLs)'}
                 </button>
                 <button
                   type="button"
-                  className={`btn ${infoModal === 'statics' ? 'btn-primary' : 'btn-soft'}`}
-                  onClick={() => setInfoModal('statics')}
+                  className="info-modal-close"
+                  onClick={() => setHeaderMenuOpen(false)}
+                  title="Schließen (Esc)"
                 >
-                  <ShieldAlert size={14} /> Statik
+                  <X size={18} />
                 </button>
               </div>
+            </div>
+
+            <div className="header-panel-tabs">
               <button
                 type="button"
-                className="info-modal-close"
-                onClick={() => setInfoModal(null)}
-                title="Schließen (Esc)"
+                className={`btn ${headerMenuTab === 'bom' ? 'btn-primary' : 'btn-soft'}`}
+                onClick={() => setHeaderMenuTab('bom')}
               >
-                <X size={18} />
+                <Download size={14} /> Stückliste
+              </button>
+              <button
+                type="button"
+                className={`btn ${headerMenuTab === 'statics' ? 'btn-primary' : 'btn-soft'}`}
+                onClick={() => setHeaderMenuTab('statics')}
+              >
+                <ShieldAlert size={14} /> Statik
               </button>
             </div>
 
-            <div className="info-modal-body">
-              {infoModal === 'bom' && (
-                <div>
-                  <div className="section-title">Rohr-Zuschnittliste</div>
-                  {pipeRows.length === 0 ? (
-                    <p className="muted-text">Noch keine Rohre im Gestell.</p>
-                  ) : (
-                    <table className="bom-table">
-                      <thead>
-                        <tr>
-                          <th>Ø</th>
-                          <th>Schnittlänge</th>
-                          <th>Menge</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pipeRows.map((r, i) => (
-                          <tr key={i}>
-                            <td>Ø {r.diameterMm} mm</td>
-                            <td><strong>{r.cutLengthMm} mm</strong></td>
-                            <td>{r.count}×</td>
+            <div className="header-panel-body">
+              {headerMenuTab === 'bom' && (
+                <div className="bom-two-col">
+                  <div>
+                    <div className="section-title">Rohr-Zuschnittliste</div>
+                    {pipeRows.length === 0 ? (
+                      <p className="muted-text">Noch keine Rohre im Gestell.</p>
+                    ) : (
+                      <table className="bom-table">
+                        <thead>
+                          <tr>
+                            <th>Ø</th>
+                            <th>Schnittlänge</th>
+                            <th>Menge</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
+                        </thead>
+                        <tbody>
+                          {pipeRows.map((r, i) => (
+                            <tr key={i}>
+                              <td>Ø {r.diameterMm} mm</td>
+                              <td><strong>{r.cutLengthMm} mm</strong></td>
+                              <td>{r.count}×</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
 
-                  <div className="section-title" style={{ marginTop: 18 }}>3D-Druckteile (Verbinder)</div>
-                  {nodeRows.length === 0 ? (
-                    <p className="muted-text">Noch keine Verbinder platziert.</p>
-                  ) : (
-                    <table className="bom-table">
-                      <thead>
-                        <tr>
-                          <th>Art.-Nr.</th>
-                          <th>Teil</th>
-                          <th>Menge</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {nodeRows.map((r, i) => (
-                          <tr key={i}>
-                            <td><code>{r.articleNumber}</code></td>
-                            <td>
-                              <div>{r.name}</div>
-                              <a className="stl-dl" href={r.stlPath} download>
-                                {r.stlPath.split('/').pop()}
-                              </a>
-                            </td>
-                            <td>{r.count}×</td>
+                  <div>
+                    <div className="section-title">3D-Druckteile (Verbinder)</div>
+                    {nodeRows.length === 0 ? (
+                      <p className="muted-text">Noch keine Verbinder platziert.</p>
+                    ) : (
+                      <table className="bom-table">
+                        <thead>
+                          <tr>
+                            <th>Art.-Nr.</th>
+                            <th>Teil</th>
+                            <th>Menge</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
+                        </thead>
+                        <tbody>
+                          {nodeRows.map((r, i) => (
+                            <tr key={i}>
+                              <td><code>{r.articleNumber}</code></td>
+                              <td>
+                                <div>{r.name}</div>
+                                <a className="stl-dl" href={r.stlPath} download>
+                                  {r.stlPath.split('/').pop()}
+                                </a>
+                              </td>
+                              <td>{r.count}×</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {infoModal === 'statics' && (
+              {headerMenuTab === 'statics' && (
                 <div>
                   <div className="section-title">Belastbarkeits-Schätzung</div>
                   <div className="stat-box">
@@ -851,6 +865,57 @@ export function App() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Farben */}
+      {colorsModalOpen && (
+        <div className="info-modal-backdrop" onClick={() => setColorsModalOpen(false)}>
+          <div className="info-modal-dialog colors-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="info-modal-header">
+              <div className="sidebar-left-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Palette size={17} style={{ color: 'var(--accent)' }} /> Standardfarben wählen
+              </div>
+              <button
+                type="button"
+                className="info-modal-close"
+                onClick={() => setColorsModalOpen(false)}
+                title="Schließen (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="info-modal-body">
+              <div className="color-modal-group">
+                <div className="section-title">Verbinder-Farbe</div>
+                <div className="swatches">
+                  {PART_COLORS.map((c) => (
+                    <button
+                      key={c.hex}
+                      className={`swatch swatch-lg ${activePartColor === c.hex ? 'active' : ''}`}
+                      style={{ background: c.hex }}
+                      title={c.name}
+                      onClick={() => setActivePartColor(c.hex)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="color-modal-group" style={{ marginTop: 16 }}>
+                <div className="section-title">Rohr-Farbe</div>
+                <div className="swatches">
+                  {PIPE_COLORS.map((c) => (
+                    <button
+                      key={c.hex}
+                      className={`swatch swatch-lg ${activePipeColor === c.hex ? 'active' : ''}`}
+                      style={{ background: c.hex }}
+                      title={c.name}
+                      onClick={() => setActivePipeColor(c.hex)}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
