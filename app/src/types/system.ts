@@ -67,6 +67,7 @@ export interface PlacedNode {
   color: string;
   stlPath: string;
   ports: PortDef[];
+  locked?: boolean;
 }
 
 export interface PipeSegment {
@@ -82,6 +83,7 @@ export interface PipeSegment {
   startInsertionMm: number;
   endInsertionMm: number;
   color: string;
+  locked?: boolean;
 }
 
 export interface ProjectMeta {

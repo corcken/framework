@@ -9,6 +9,8 @@ import {
   FileText,
   FolderOpen,
   Layers,
+  Link2,
+  Lock,
   Magnet,
   RotateCw,
   Ruler,
@@ -16,6 +18,7 @@ import {
   ShieldAlert,
   Sparkles,
   Trash2,
+  Unlock,
 } from 'lucide-react';
 import {
   CATALOG_CATEGORIES,
@@ -54,6 +57,8 @@ export function App() {
   const setShowDimensions = useConfigStore((s) => s.setShowDimensions);
   const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
   const setSnapDistanceMm = useConfigStore((s) => s.setSnapDistanceMm);
+  const moveConnectedGroup = useConfigStore((s) => s.moveConnectedGroup);
+  const setMoveConnectedGroup = useConfigStore((s) => s.setMoveConnectedGroup);
 
   const addNode = useConfigStore((s) => s.addNode);
   const addFreePipe = useConfigStore((s) => s.addFreePipe);
@@ -62,6 +67,7 @@ export function App() {
   const setItemColor = useConfigStore((s) => s.setItemColor);
   const updatePipeLength = useConfigStore((s) => s.updatePipeLength);
   const dropSelectedToGround = useConfigStore((s) => s.dropSelectedToGround);
+  const toggleLockSelected = useConfigStore((s) => s.toggleLockSelected);
   const deleteSelected = useConfigStore((s) => s.deleteSelected);
   const loadDemoFrame = useConfigStore((s) => s.loadDemoFrame);
   const clearProject = useConfigStore((s) => s.clearProject);
@@ -106,6 +112,7 @@ export function App() {
 
   const selectedNode = selectedType === 'node' ? nodes.find((n) => n.uid === selectedUid) : undefined;
   const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.uid === selectedUid) : undefined;
+  const isSelectedLocked = Boolean(selectedNode?.locked || selectedPipe?.locked);
 
   const { nodeRows, pipeRows } = buildBom(nodes, pipes);
   const bounds = computeFrameBounds(nodes, pipes);
@@ -272,9 +279,31 @@ export function App() {
           </button>
           <button
             type="button"
+            className={`btn ${moveConnectedGroup ? 'btn-active' : 'btn-soft'}`}
+            onClick={() => setMoveConnectedGroup(!moveConnectedGroup)}
+            title="Verbundene Rohre und Verbinder gemeinsam verschieben"
+          >
+            <Link2 size={15} />
+            <span>Verbund</span>
+            <span className={`toggle-pill ${moveConnectedGroup ? 'on' : 'off'}`}>
+              {moveConnectedGroup ? 'An' : 'Aus'}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`btn ${isSelectedLocked ? 'btn-warn-active' : 'btn-soft'}`}
+            onClick={toggleLockSelected}
+            disabled={!selectedUid}
+            title={isSelectedLocked ? 'Objekt entsperren' : 'Ausgewähltes Objekt sperren (Lock)'}
+          >
+            {isSelectedLocked ? <Lock size={15} /> : <Unlock size={15} />}
+            <span>{isSelectedLocked ? 'Gesperrt' : 'Sperren'}</span>
+          </button>
+          <button
+            type="button"
             className="btn btn-soft"
             onClick={dropSelectedToGround}
-            disabled={!selectedUid}
+            disabled={!selectedUid || isSelectedLocked}
             title="Ausgewähltes Objekt auf Höhe 0 (Boden) setzen"
           >
             <ArrowDownToLine size={15} /> Höhe 0
@@ -584,16 +613,31 @@ export function App() {
                     ))}
                   </div>
 
-                  <button
-                    className="btn btn-soft"
-                    style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
-                    onClick={dropSelectedToGround}
-                    title="Verbinder auf Höhe Y = 0 setzen"
-                  >
-                    <ArrowDownToLine size={14} /> Auf Höhe 0 setzen
-                  </button>
+                  <div className="inline-btn-row" style={{ marginTop: 12 }}>
+                    <button
+                      className={`btn ${selectedNode.locked ? 'btn-warn-active' : 'btn-soft'}`}
+                      onClick={toggleLockSelected}
+                      title={selectedNode.locked ? 'Verbinder entsperren' : 'Verbinder sperren'}
+                    >
+                      {selectedNode.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                      {selectedNode.locked ? 'Gesperrt' : 'Sperren'}
+                    </button>
+                    <button
+                      className="btn btn-soft"
+                      onClick={dropSelectedToGround}
+                      disabled={selectedNode.locked}
+                      title="Verbinder auf Höhe Y = 0 setzen"
+                    >
+                      <ArrowDownToLine size={14} /> Höhe 0
+                    </button>
+                  </div>
 
-                  <button className="btn btn-danger" style={{ marginTop: 8, width: '100%' }} onClick={deleteSelected}>
+                  <button
+                    className="btn btn-danger"
+                    style={{ marginTop: 8, width: '100%' }}
+                    onClick={deleteSelected}
+                    disabled={selectedNode.locked}
+                  >
                     <Trash2 size={14} /> Bauteil löschen
                   </button>
                 </div>
@@ -630,16 +674,31 @@ export function App() {
                     ))}
                   </div>
 
-                  <button
-                    className="btn btn-soft"
-                    style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
-                    onClick={dropSelectedToGround}
-                    title="Rohr auf Höhe Y = 0 setzen"
-                  >
-                    <ArrowDownToLine size={14} /> Auf Höhe 0 setzen
-                  </button>
+                  <div className="inline-btn-row" style={{ marginTop: 12 }}>
+                    <button
+                      className={`btn ${selectedPipe.locked ? 'btn-warn-active' : 'btn-soft'}`}
+                      onClick={toggleLockSelected}
+                      title={selectedPipe.locked ? 'Rohr entsperren' : 'Rohr sperren'}
+                    >
+                      {selectedPipe.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                      {selectedPipe.locked ? 'Gesperrt' : 'Sperren'}
+                    </button>
+                    <button
+                      className="btn btn-soft"
+                      onClick={dropSelectedToGround}
+                      disabled={selectedPipe.locked}
+                      title="Rohr auf Höhe Y = 0 setzen"
+                    >
+                      <ArrowDownToLine size={14} /> Höhe 0
+                    </button>
+                  </div>
 
-                  <button className="btn btn-danger" style={{ marginTop: 8, width: '100%' }} onClick={deleteSelected}>
+                  <button
+                    className="btn btn-danger"
+                    style={{ marginTop: 8, width: '100%' }}
+                    onClick={deleteSelected}
+                    disabled={selectedPipe.locked}
+                  >
                     <Trash2 size={14} /> Rohr löschen
                   </button>
                 </div>

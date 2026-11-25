@@ -184,10 +184,16 @@ const NodeMesh: React.FC<{ node: PlacedNode }> = ({ node }) => {
           </mesh>
         );
       })}
+      {/* Lock-Anzeige */}
+      {node.locked && (
+        <Html center position={[0, node.diameterMm + 18, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="lock-badge" title="Gesperrt">🔒</div>
+        </Html>
+      )}
     </group>
   );
 
-  if (isSelected && groupObj) {
+  if (isSelected && !node.locked && groupObj) {
     return (
       <>
         {content}
@@ -252,17 +258,22 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
           emissiveIntensity={isSelected ? 0.3 : 0}
         />
       </mesh>
-      {showDimensions && (
+      {(showDimensions || pipe.locked) && (
         <Html center distanceFactor={950} style={{ pointerEvents: 'none' }}>
-          <div className="dim-label">
-            Ø{pipe.diameterMm} · {cutLen} mm
+          <div className="dim-label-stack">
+            {pipe.locked && <div className="lock-badge" title="Gesperrt">🔒</div>}
+            {showDimensions && (
+              <div className="dim-label">
+                Ø{pipe.diameterMm} · {cutLen} mm
+              </div>
+            )}
           </div>
         </Html>
       )}
     </group>
   );
 
-  if (isSelected && groupObj) {
+  if (isSelected && !pipe.locked && groupObj) {
     return (
       <>
         {content}

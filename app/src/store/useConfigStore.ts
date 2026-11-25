@@ -31,6 +31,7 @@ interface ConfigState {
   pendingPort: PendingPortRef | null;
   showDimensions: boolean;
   snapDistanceMm: number;
+  moveConnectedGroup: boolean;
   cameraPreset: CameraPreset;
   cameraTick: number;
 
@@ -41,6 +42,7 @@ interface ConfigState {
   setActivePipeColor: (hex: string) => void;
   setShowDimensions: (v: boolean) => void;
   setSnapDistanceMm: (d: number) => void;
+  setMoveConnectedGroup: (v: boolean) => void;
   triggerCamera: (preset: CameraPreset) => void;
 
   selectItem: (uid: string | null, type: 'node' | 'pipe' | null) => void;
@@ -50,6 +52,7 @@ interface ConfigState {
   moveNode: (uid: string, position: [number, number, number]) => void;
   movePipe: (uid: string, newMid: [number, number, number]) => void;
   dropSelectedToGround: () => void;
+  toggleLockSelected: () => void;
   rotateNodeAxis: (uid: string, axis: 'x' | 'y' | 'z', deg: number) => void;
   setItemColor: (uid: string, type: 'node' | 'pipe', color: string) => void;
   deleteSelected: () => void;
@@ -76,6 +79,38 @@ function snapCoord(v: number, step: number): number {
   return Math.round(v / step) * step;
 }
 
+function getConnectedComponent(
+  pipes: PipeSegment[],
+  seedNodeUids: string[],
+  seedPipeUids: string[]
+): { nodeUids: Set<string>; pipeUids: Set<string> } {
+  const nodeUids = new Set<string>(seedNodeUids);
+  const pipeUids = new Set<string>(seedPipeUids);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of pipes) {
+      const hasStart = p.startNodeUid ? nodeUids.has(p.startNodeUid) : false;
+      const hasEnd = p.endNodeUid ? nodeUids.has(p.endNodeUid) : false;
+      if (pipeUids.has(p.uid) || hasStart || hasEnd) {
+        if (!pipeUids.has(p.uid)) {
+          pipeUids.add(p.uid);
+          changed = true;
+        }
+        if (p.startNodeUid && !nodeUids.has(p.startNodeUid)) {
+          nodeUids.add(p.startNodeUid);
+          changed = true;
+        }
+        if (p.endNodeUid && !nodeUids.has(p.endNodeUid)) {
+          nodeUids.add(p.endNodeUid);
+          changed = true;
+        }
+      }
+    }
+  }
+  return { nodeUids, pipeUids };
+}
+
 export const useConfigStore = create<ConfigState>((set, get) => ({
   meta: {
     name: 'Mein Rohrgestell',
@@ -94,6 +129,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   pendingPort: null,
   showDimensions: false,
   snapDistanceMm: 10,
+  moveConnectedGroup: true,
   cameraPreset: 'iso',
   cameraTick: 0,
 
@@ -104,6 +140,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   setActivePipeColor: (hex) => set({ activePipeColor: hex }),
   setShowDimensions: (v) => set({ showDimensions: v }),
   setSnapDistanceMm: (d) => set({ snapDistanceMm: Math.max(0, Math.round(d)) }),
+  setMoveConnectedGroup: (v) => set({ moveConnectedGroup: v }),
   triggerCamera: (preset) => set((s) => ({ cameraPreset: preset, cameraTick: s.cameraTick + 1 })),
 
   selectItem: (uid, type) => set({ selectedUid: uid, selectedType: type }),
@@ -143,7 +180,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   moveNode: (uid, position) =>
     set((s) => {
       const targetNode = s.nodes.find((n) => n.uid === uid);
-      if (!targetNode) return s;
+      if (!targetNode || targetNode.locked) return s;
+
+      const group = s.moveConnectedGroup
+        ? getConnectedComponent(s.pipes, [uid], [])
+        : { nodeUids: new Set([uid]), pipeUids: new Set<string>() };
+
+      if (s.moveConnectedGroup) {
+        const hasLockedNode = s.nodes.some((n) => group.nodeUids.has(n.uid) && n.locked);
+        const hasLockedPipe = s.pipes.some((p) => group.pipeUids.has(p.uid) && p.locked);
+        if (hasLockedNode || hasLockedPipe) return s;
+      }
 
       let finalPos: [number, number, number] = [
         Math.round(position[0] * 10) / 10,
@@ -157,11 +204,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         let bestDist = snapDist;
         let bestDelta: [number, number, number] | null = null;
 
-        // 1. Gegen Ports anderer Verbinder prüfen
+        // 1. Gegen Ports externer Verbinder prüfen
         for (const myPort of candidateNode.ports) {
           const myWorld = getWorldPort(candidateNode, myPort).pos;
           for (const other of s.nodes) {
-            if (other.uid === uid) continue;
+            if (group.nodeUids.has(other.uid)) continue;
             for (const otherPort of other.ports) {
               const otherWorld = getWorldPort(other, otherPort).pos;
               const d = Math.hypot(
@@ -180,8 +227,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             }
           }
 
-          // 2. Gegen freie Rohrenden prüfen
+          // 2. Gegen freie Rohrenden externer Rohre prüfen
           for (const pipe of s.pipes) {
+            if (group.pipeUids.has(pipe.uid)) continue;
             if (!pipe.startNodeUid) {
               const dStart = Math.hypot(
                 pipe.startPos[0] - myWorld[0],
@@ -224,9 +272,49 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         }
       }
 
-      const nextNodes = s.nodes.map((n) => (n.uid === uid ? { ...n, position: finalPos } : n));
+      const dx = finalPos[0] - targetNode.position[0];
+      let dy = finalPos[1] - targetNode.position[1];
+      const dz = finalPos[2] - targetNode.position[2];
+
+      if (s.moveConnectedGroup && group.nodeUids.size > 1) {
+        let minNewY = Infinity;
+        for (const n of s.nodes) {
+          if (group.nodeUids.has(n.uid)) {
+            minNewY = Math.min(minNewY, n.position[1] + dy);
+          }
+        }
+        if (minNewY < 0) dy -= minNewY;
+      }
+
+      const nextNodes = s.nodes.map((n) => {
+        if (!group.nodeUids.has(n.uid)) return n;
+        return {
+          ...n,
+          position: [
+            Math.round((n.position[0] + dx) * 10) / 10,
+            Math.max(0, Math.round((n.position[1] + dy) * 10) / 10),
+            Math.round((n.position[2] + dz) * 10) / 10,
+          ] as [number, number, number],
+        };
+      });
+
       const nodeMap = new Map(nextNodes.map((n) => [n.uid, n]));
       const nextPipes = s.pipes.map((p) => {
+        if (s.moveConnectedGroup && group.pipeUids.has(p.uid)) {
+          return {
+            ...p,
+            startPos: [
+              Math.round((p.startPos[0] + dx) * 10) / 10,
+              Math.round((p.startPos[1] + dy) * 10) / 10,
+              Math.round((p.startPos[2] + dz) * 10) / 10,
+            ] as [number, number, number],
+            endPos: [
+              Math.round((p.endPos[0] + dx) * 10) / 10,
+              Math.round((p.endPos[1] + dy) * 10) / 10,
+              Math.round((p.endPos[2] + dz) * 10) / 10,
+            ] as [number, number, number],
+          };
+        }
         let updated = { ...p };
         if (p.startNodeUid === uid && p.startPortId) {
           const n = nodeMap.get(uid);
@@ -246,7 +334,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   movePipe: (uid, newMid) =>
     set((s) => {
       const targetPipe = s.pipes.find((p) => p.uid === uid);
-      if (!targetPipe) return s;
+      if (!targetPipe || targetPipe.locked) return s;
 
       const oldMid: [number, number, number] = [
         (targetPipe.startPos[0] + targetPipe.endPos[0]) / 2,
@@ -258,6 +346,60 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         newMid[1] - oldMid[1],
         newMid[2] - oldMid[2],
       ];
+
+      // Verbund-Verschieben für angeschlossenes Gestell
+      if (s.moveConnectedGroup && (targetPipe.startNodeUid || targetPipe.endNodeUid)) {
+        const group = getConnectedComponent(s.pipes, [], [uid]);
+        const hasLockedNode = s.nodes.some((n) => group.nodeUids.has(n.uid) && n.locked);
+        const hasLockedPipe = s.pipes.some((p) => group.pipeUids.has(p.uid) && p.locked);
+        if (hasLockedNode || hasLockedPipe) return s;
+
+        const dx = delta[0];
+        let dy = delta[1];
+        const dz = delta[2];
+        let minNewY = Infinity;
+        for (const n of s.nodes) {
+          if (group.nodeUids.has(n.uid)) minNewY = Math.min(minNewY, n.position[1] + dy);
+        }
+        for (const p of s.pipes) {
+          if (group.pipeUids.has(p.uid)) {
+            minNewY = Math.min(minNewY, p.startPos[1] + dy, p.endPos[1] + dy);
+          }
+        }
+        if (minNewY < 0) dy -= minNewY;
+
+        return {
+          nodes: s.nodes.map((n) =>
+            group.nodeUids.has(n.uid)
+              ? {
+                  ...n,
+                  position: [
+                    Math.round((n.position[0] + dx) * 10) / 10,
+                    Math.max(0, Math.round((n.position[1] + dy) * 10) / 10),
+                    Math.round((n.position[2] + dz) * 10) / 10,
+                  ] as [number, number, number],
+                }
+              : n
+          ),
+          pipes: s.pipes.map((p) =>
+            group.pipeUids.has(p.uid)
+              ? {
+                  ...p,
+                  startPos: [
+                    Math.round((p.startPos[0] + dx) * 10) / 10,
+                    Math.round((p.startPos[1] + dy) * 10) / 10,
+                    Math.round((p.startPos[2] + dz) * 10) / 10,
+                  ] as [number, number, number],
+                  endPos: [
+                    Math.round((p.endPos[0] + dx) * 10) / 10,
+                    Math.round((p.endPos[1] + dy) * 10) / 10,
+                    Math.round((p.endPos[2] + dz) * 10) / 10,
+                  ] as [number, number, number],
+                }
+              : p
+          ),
+        };
+      }
 
       let nextStart: [number, number, number] = [
         Math.round((targetPipe.startPos[0] + delta[0]) * 10) / 10,
@@ -330,7 +472,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           ];
         }
 
-        // Prüfe für beide Enden, ob sie auf einem Port liegen
         for (const node of s.nodes) {
           for (const port of node.ports) {
             const worldPos = getWorldPort(node, port).pos;
@@ -375,7 +516,52 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   dropSelectedToGround: () =>
     set((s) => {
-      if (!s.selectedUid) return s;
+      if (!s.selectedUid || !s.selectedType) return s;
+      if (s.selectedType === 'node') {
+        const target = s.nodes.find((n) => n.uid === s.selectedUid);
+        if (!target || target.locked) return s;
+      } else {
+        const target = s.pipes.find((p) => p.uid === s.selectedUid);
+        if (!target || target.locked) return s;
+      }
+
+      if (s.moveConnectedGroup) {
+        const group = getConnectedComponent(
+          s.pipes,
+          s.selectedType === 'node' ? [s.selectedUid] : [],
+          s.selectedType === 'pipe' ? [s.selectedUid] : []
+        );
+        const hasLockedNode = s.nodes.some((n) => group.nodeUids.has(n.uid) && n.locked);
+        const hasLockedPipe = s.pipes.some((p) => group.pipeUids.has(p.uid) && p.locked);
+        if (hasLockedNode || hasLockedPipe) return s;
+
+        let minY = Infinity;
+        for (const n of s.nodes) {
+          if (group.nodeUids.has(n.uid)) minY = Math.min(minY, n.position[1]);
+        }
+        for (const p of s.pipes) {
+          if (group.pipeUids.has(p.uid)) minY = Math.min(minY, p.startPos[1], p.endPos[1]);
+        }
+        if (!Number.isFinite(minY)) return s;
+
+        return {
+          nodes: s.nodes.map((n) =>
+            group.nodeUids.has(n.uid)
+              ? { ...n, position: [n.position[0], Math.max(0, Math.round((n.position[1] - minY) * 10) / 10), n.position[2]] as [number, number, number] }
+              : n
+          ),
+          pipes: s.pipes.map((p) =>
+            group.pipeUids.has(p.uid)
+              ? {
+                  ...p,
+                  startPos: [p.startPos[0], Math.round((p.startPos[1] - minY) * 10) / 10, p.startPos[2]] as [number, number, number],
+                  endPos: [p.endPos[0], Math.round((p.endPos[1] - minY) * 10) / 10, p.endPos[2]] as [number, number, number],
+                }
+              : p
+          ),
+        };
+      }
+
       if (s.selectedType === 'node') {
         const uid = s.selectedUid;
         const nextNodes = s.nodes.map((n) =>
@@ -399,31 +585,43 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         return { nodes: nextNodes, pipes: nextPipes };
       }
 
-      if (s.selectedType === 'pipe') {
-        const uid = s.selectedUid;
+      const uid = s.selectedUid;
+      return {
+        pipes: s.pipes.map((p) => {
+          if (p.uid !== uid || p.locked) return p;
+          const minY = Math.min(p.startPos[1], p.endPos[1]);
+          return {
+            ...p,
+            startPos: [p.startPos[0], Math.round((p.startPos[1] - minY) * 10) / 10, p.startPos[2]],
+            endPos: [p.endPos[0], Math.round((p.endPos[1] - minY) * 10) / 10, p.endPos[2]],
+            startNodeUid: undefined,
+            startPortId: undefined,
+            startInsertionMm: 0,
+            endNodeUid: undefined,
+            endPortId: undefined,
+            endInsertionMm: 0,
+          };
+        }),
+      };
+    }),
+
+  toggleLockSelected: () =>
+    set((s) => {
+      if (!s.selectedUid || !s.selectedType) return s;
+      if (s.selectedType === 'node') {
         return {
-          pipes: s.pipes.map((p) => {
-            if (p.uid !== uid) return p;
-            const minY = Math.min(p.startPos[1], p.endPos[1]);
-            return {
-              ...p,
-              startPos: [p.startPos[0], Math.round((p.startPos[1] - minY) * 10) / 10, p.startPos[2]],
-              endPos: [p.endPos[0], Math.round((p.endPos[1] - minY) * 10) / 10, p.endPos[2]],
-              startNodeUid: undefined,
-              startPortId: undefined,
-              startInsertionMm: 0,
-              endNodeUid: undefined,
-              endPortId: undefined,
-              endInsertionMm: 0,
-            };
-          }),
+          nodes: s.nodes.map((n) => (n.uid === s.selectedUid ? { ...n, locked: !n.locked } : n)),
         };
       }
-      return s;
+      return {
+        pipes: s.pipes.map((p) => (p.uid === s.selectedUid ? { ...p, locked: !p.locked } : p)),
+      };
     }),
 
   rotateNodeAxis: (uid, axis, deg) =>
     set((s) => {
+      const target = s.nodes.find((n) => n.uid === uid);
+      if (!target || target.locked) return s;
       const rad = (deg * Math.PI) / 180;
       const idx = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
       const nextNodes = s.nodes.map((n) => {
@@ -462,6 +660,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     set((s) => {
       if (!s.selectedUid) return s;
       if (s.selectedType === 'node') {
+        const target = s.nodes.find((n) => n.uid === s.selectedUid);
+        if (target?.locked) return s;
         return {
           nodes: s.nodes.filter((n) => n.uid !== s.selectedUid),
           pipes: s.pipes.filter((p) => p.startNodeUid !== s.selectedUid && p.endNodeUid !== s.selectedUid),
@@ -470,6 +670,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           pendingPort: null,
         };
       }
+      const targetPipe = s.pipes.find((p) => p.uid === s.selectedUid);
+      if (targetPipe?.locked) return s;
       return {
         pipes: s.pipes.filter((p) => p.uid !== s.selectedUid),
         selectedUid: null,
@@ -571,7 +773,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   updatePipeLength: (uid, newAxisLengthMm) =>
     set((s) => ({
       pipes: s.pipes.map((p) => {
-        if (p.uid !== uid) return p;
+        if (p.uid !== uid || p.locked) return p;
         const dx = p.endPos[0] - p.startPos[0];
         const dy = p.endPos[1] - p.startPos[1];
         const dz = p.endPos[2] - p.startPos[2];
