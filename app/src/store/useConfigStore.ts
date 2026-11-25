@@ -53,6 +53,7 @@ interface ConfigState {
   movePipe: (uid: string, newMid: [number, number, number]) => void;
   dropSelectedToGround: () => void;
   toggleLockSelected: () => void;
+  togglePipeConnectionLock: (pipeUid: string, end: 'start' | 'end') => void;
   rotateNodeAxis: (uid: string, axis: 'x' | 'y' | 'z', deg: number) => void;
   setItemColor: (uid: string, type: 'node' | 'pipe', color: string) => void;
   deleteSelected: () => void;
@@ -90,18 +91,20 @@ function getConnectedComponent(
   while (changed) {
     changed = false;
     for (const p of pipes) {
-      const hasStart = p.startNodeUid ? nodeUids.has(p.startNodeUid) : false;
-      const hasEnd = p.endNodeUid ? nodeUids.has(p.endNodeUid) : false;
+      const startLocked = Boolean(p.startNodeUid) && p.startLocked !== false;
+      const endLocked = Boolean(p.endNodeUid) && p.endLocked !== false;
+      const hasStart = startLocked && p.startNodeUid ? nodeUids.has(p.startNodeUid) : false;
+      const hasEnd = endLocked && p.endNodeUid ? nodeUids.has(p.endNodeUid) : false;
       if (pipeUids.has(p.uid) || hasStart || hasEnd) {
         if (!pipeUids.has(p.uid)) {
           pipeUids.add(p.uid);
           changed = true;
         }
-        if (p.startNodeUid && !nodeUids.has(p.startNodeUid)) {
+        if (startLocked && p.startNodeUid && !nodeUids.has(p.startNodeUid)) {
           nodeUids.add(p.startNodeUid);
           changed = true;
         }
-        if (p.endNodeUid && !nodeUids.has(p.endNodeUid)) {
+        if (endLocked && p.endNodeUid && !nodeUids.has(p.endNodeUid)) {
           nodeUids.add(p.endNodeUid);
           changed = true;
         }
@@ -317,14 +320,29 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         }
         let updated = { ...p };
         if (p.startNodeUid === uid && p.startPortId) {
-          const n = nodeMap.get(uid);
-          const port = n?.ports.find((pt) => pt.id === p.startPortId);
-          if (n && port) updated.startPos = getWorldPort(n, port).pos;
+          if (p.startLocked === false) {
+            // Geöffnetes Schloss: Rohr bleibt stehen, Verbindung löst sich
+            updated.startNodeUid = undefined;
+            updated.startPortId = undefined;
+            updated.startLocked = undefined;
+            updated.startInsertionMm = 0;
+          } else {
+            const n = nodeMap.get(uid);
+            const port = n?.ports.find((pt) => pt.id === p.startPortId);
+            if (n && port) updated.startPos = getWorldPort(n, port).pos;
+          }
         }
         if (p.endNodeUid === uid && p.endPortId) {
-          const n = nodeMap.get(uid);
-          const port = n?.ports.find((pt) => pt.id === p.endPortId);
-          if (n && port) updated.endPos = getWorldPort(n, port).pos;
+          if (p.endLocked === false) {
+            updated.endNodeUid = undefined;
+            updated.endPortId = undefined;
+            updated.endLocked = undefined;
+            updated.endInsertionMm = 0;
+          } else {
+            const n = nodeMap.get(uid);
+            const port = n?.ports.find((pt) => pt.id === p.endPortId);
+            if (n && port) updated.endPos = getWorldPort(n, port).pos;
+          }
         }
         return updated;
       });
@@ -347,8 +365,12 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         newMid[2] - oldMid[2],
       ];
 
-      // Verbund-Verschieben für angeschlossenes Gestell
-      if (s.moveConnectedGroup && (targetPipe.startNodeUid || targetPipe.endNodeUid)) {
+      const hasLockedConnection =
+        (Boolean(targetPipe.startNodeUid) && targetPipe.startLocked !== false) ||
+        (Boolean(targetPipe.endNodeUid) && targetPipe.endLocked !== false);
+
+      // Verbund-Verschieben für angeschlossenes Gestell mit geschlossenen Schlössern
+      if (s.moveConnectedGroup && hasLockedConnection) {
         const group = getConnectedComponent(s.pipes, [], [uid]);
         const hasLockedNode = s.nodes.some((n) => group.nodeUids.has(n.uid) && n.locked);
         const hasLockedPipe = s.pipes.some((p) => group.pipeUids.has(p.uid) && p.locked);
@@ -381,23 +403,30 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
                 }
               : n
           ),
-          pipes: s.pipes.map((p) =>
-            group.pipeUids.has(p.uid)
-              ? {
-                  ...p,
-                  startPos: [
-                    Math.round((p.startPos[0] + dx) * 10) / 10,
-                    Math.round((p.startPos[1] + dy) * 10) / 10,
-                    Math.round((p.startPos[2] + dz) * 10) / 10,
-                  ] as [number, number, number],
-                  endPos: [
-                    Math.round((p.endPos[0] + dx) * 10) / 10,
-                    Math.round((p.endPos[1] + dy) * 10) / 10,
-                    Math.round((p.endPos[2] + dz) * 10) / 10,
-                  ] as [number, number, number],
-                }
-              : p
-          ),
+          pipes: s.pipes.map((p) => {
+            if (!group.pipeUids.has(p.uid)) return p;
+            const detachStart = p.startNodeUid && p.startLocked === false;
+            const detachEnd = p.endNodeUid && p.endLocked === false;
+            return {
+              ...p,
+              startPos: [
+                Math.round((p.startPos[0] + dx) * 10) / 10,
+                Math.round((p.startPos[1] + dy) * 10) / 10,
+                Math.round((p.startPos[2] + dz) * 10) / 10,
+              ] as [number, number, number],
+              endPos: [
+                Math.round((p.endPos[0] + dx) * 10) / 10,
+                Math.round((p.endPos[1] + dy) * 10) / 10,
+                Math.round((p.endPos[2] + dz) * 10) / 10,
+              ] as [number, number, number],
+              ...(detachStart
+                ? { startNodeUid: undefined, startPortId: undefined, startLocked: undefined, startInsertionMm: 0 }
+                : {}),
+              ...(detachEnd
+                ? { endNodeUid: undefined, endPortId: undefined, endLocked: undefined, endInsertionMm: 0 }
+                : {}),
+            };
+          }),
         };
       }
 
@@ -504,9 +533,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
                 endPos: nextEnd,
                 startNodeUid,
                 startPortId,
+                startLocked: startNodeUid ? true : undefined,
                 startInsertionMm,
                 endNodeUid,
                 endPortId,
+                endLocked: endNodeUid ? true : undefined,
                 endInsertionMm,
               }
             : p
@@ -618,6 +649,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       };
     }),
 
+  togglePipeConnectionLock: (pipeUid, end) =>
+    set((s) => ({
+      pipes: s.pipes.map((p) => {
+        if (p.uid !== pipeUid) return p;
+        if (end === 'start') {
+          return { ...p, startLocked: p.startLocked === false ? true : false };
+        }
+        return { ...p, endLocked: p.endLocked === false ? true : false };
+      }),
+    })),
+
   rotateNodeAxis: (uid, axis, deg) =>
     set((s) => {
       const target = s.nodes.find((n) => n.uid === uid);
@@ -700,8 +742,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       endPos: worldB.pos,
       startNodeUid: nodeA.uid,
       startPortId: portA.id,
+      startLocked: true,
       endNodeUid: nodeB.uid,
       endPortId: portB.id,
+      endLocked: true,
       startInsertionMm: portA.insertionDepthMm,
       endInsertionMm: portB.insertionDepthMm,
       color: state.activePipeColor,
@@ -737,6 +781,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       endPos,
       startNodeUid: node.uid,
       startPortId: port.id,
+      startLocked: true,
       startInsertionMm: port.insertionDepthMm,
       endInsertionMm: 0,
       color: state.activePipeColor,

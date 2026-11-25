@@ -78,8 +78,10 @@ export interface PipeSegment {
   endPos: [number, number, number];   // mm (Mittelpunkt / Knoten)
   startNodeUid?: string;
   startPortId?: string;
+  startLocked?: boolean;
   endNodeUid?: string;
   endPortId?: string;
+  endLocked?: boolean;
   startInsertionMm: number;
   endInsertionMm: number;
   color: string;

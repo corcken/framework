@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownToLine,
   Box,
@@ -9,7 +9,6 @@ import {
   FileText,
   FolderOpen,
   Layers,
-  Link2,
   Lock,
   Magnet,
   RotateCw,
@@ -19,6 +18,7 @@ import {
   Sparkles,
   Trash2,
   Unlock,
+  X,
 } from 'lucide-react';
 import {
   CATALOG_CATEGORIES,
@@ -57,8 +57,6 @@ export function App() {
   const setShowDimensions = useConfigStore((s) => s.setShowDimensions);
   const snapDistanceMm = useConfigStore((s) => s.snapDistanceMm);
   const setSnapDistanceMm = useConfigStore((s) => s.setSnapDistanceMm);
-  const moveConnectedGroup = useConfigStore((s) => s.moveConnectedGroup);
-  const setMoveConnectedGroup = useConfigStore((s) => s.setMoveConnectedGroup);
 
   const addNode = useConfigStore((s) => s.addNode);
   const addFreePipe = useConfigStore((s) => s.addFreePipe);
@@ -68,6 +66,7 @@ export function App() {
   const updatePipeLength = useConfigStore((s) => s.updatePipeLength);
   const dropSelectedToGround = useConfigStore((s) => s.dropSelectedToGround);
   const toggleLockSelected = useConfigStore((s) => s.toggleLockSelected);
+  const togglePipeConnectionLock = useConfigStore((s) => s.togglePipeConnectionLock);
   const deleteSelected = useConfigStore((s) => s.deleteSelected);
   const loadDemoFrame = useConfigStore((s) => s.loadDemoFrame);
   const clearProject = useConfigStore((s) => s.clearProject);
@@ -76,8 +75,16 @@ export function App() {
 
   const [portPipeLen, setPortPipeLen] = useState(400);
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [rightTab, setRightTab] = useState<'props' | 'bom' | 'statics'>('bom');
+  const [infoModal, setInfoModal] = useState<'bom' | 'statics' | null>(null);
   const [busyZip, setBusyZip] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && infoModal) setInfoModal(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [infoModal]);
 
   // Zustand für ausklappbare Kategorien (standardmäßig alle geöffnet)
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
@@ -113,6 +120,7 @@ export function App() {
   const selectedNode = selectedType === 'node' ? nodes.find((n) => n.uid === selectedUid) : undefined;
   const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.uid === selectedUid) : undefined;
   const isSelectedLocked = Boolean(selectedNode?.locked || selectedPipe?.locked);
+  const showRightSidebar = Boolean(selectedNode || selectedPipe || pendingPort);
 
   const { nodeRows, pipeRows } = buildBom(nodes, pipes);
   const bounds = computeFrameBounds(nodes, pipes);
@@ -279,15 +287,19 @@ export function App() {
           </button>
           <button
             type="button"
-            className={`btn ${moveConnectedGroup ? 'btn-active' : 'btn-soft'}`}
-            onClick={() => setMoveConnectedGroup(!moveConnectedGroup)}
-            title="Verbundene Rohre und Verbinder gemeinsam verschieben"
+            className="btn btn-soft"
+            onClick={() => setInfoModal('bom')}
+            title="Stückliste anzeigen"
           >
-            <Link2 size={15} />
-            <span>Verbund</span>
-            <span className={`toggle-pill ${moveConnectedGroup ? 'on' : 'off'}`}>
-              {moveConnectedGroup ? 'An' : 'Aus'}
-            </span>
+            <Download size={15} /> Stückliste
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft"
+            onClick={() => setInfoModal('statics')}
+            title="Statik &amp; Belastbarkeit anzeigen"
+          >
+            <ShieldAlert size={15} /> Statik
           </button>
           <button
             type="button"
@@ -333,7 +345,7 @@ export function App() {
       </header>
 
       {/* Hauptbereich */}
-      <div className="workspace">
+      <div className={`workspace ${showRightSidebar ? '' : 'no-right-sidebar'}`}>
         {/* Linke Sidebar: Katalog */}
         <aside className="sidebar-left">
           <div className="panel-section">
@@ -540,21 +552,13 @@ export function App() {
           </div>
         </main>
 
-        {/* Rechte Sidebar: Eigenschaften, Stückliste, Statik */}
-        <aside className="sidebar-right">
-          <div className="tab-bar">
-            <button className={rightTab === 'props' ? 'active' : ''} onClick={() => setRightTab('props')}>
+        {/* Rechte Sidebar: Immer Bauteil, ausgeblendet wenn nichts ausgewählt */}
+        {showRightSidebar && (
+          <aside className="sidebar-right">
+            <div className="sidebar-right-header">
               <Layers size={14} /> Bauteil
-            </button>
-            <button className={rightTab === 'bom' ? 'active' : ''} onClick={() => setRightTab('bom')}>
-              <Download size={14} /> Stückliste
-            </button>
-            <button className={rightTab === 'statics' ? 'active' : ''} onClick={() => setRightTab('statics')}>
-              <ShieldAlert size={14} /> Statik
-            </button>
-          </div>
+            </div>
 
-          {rightTab === 'props' && (
             <div className="tab-content">
               {pendingPort && (
                 <div className="box-highlight">
@@ -674,6 +678,36 @@ export function App() {
                     ))}
                   </div>
 
+                  {(selectedPipe.startNodeUid || selectedPipe.endNodeUid) && (
+                    <div style={{ marginTop: 12 }}>
+                      <div className="section-title">Anschlusspunkte (Schlösser)</div>
+                      <div className="inline-btn-row">
+                        {selectedPipe.startNodeUid && (
+                          <button
+                            type="button"
+                            className={`btn ${selectedPipe.startLocked === false ? 'btn-soft' : 'btn-warn-active'}`}
+                            onClick={() => togglePipeConnectionLock(selectedPipe.uid, 'start')}
+                            title="Start-Anschluss sperren/entsperren"
+                          >
+                            {selectedPipe.startLocked === false ? <Unlock size={13} /> : <Lock size={13} />}
+                            Start {selectedPipe.startLocked === false ? 'Offen' : 'Zu'}
+                          </button>
+                        )}
+                        {selectedPipe.endNodeUid && (
+                          <button
+                            type="button"
+                            className={`btn ${selectedPipe.endLocked === false ? 'btn-soft' : 'btn-warn-active'}`}
+                            onClick={() => togglePipeConnectionLock(selectedPipe.uid, 'end')}
+                            title="End-Anschluss sperren/entsperren"
+                          >
+                            {selectedPipe.endLocked === false ? <Unlock size={13} /> : <Lock size={13} />}
+                            Ende {selectedPipe.endLocked === false ? 'Offen' : 'Zu'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="inline-btn-row" style={{ marginTop: 12 }}>
                     <button
                       className={`btn ${selectedPipe.locked ? 'btn-warn-active' : 'btn-soft'}`}
@@ -703,96 +737,126 @@ export function App() {
                   </button>
                 </div>
               )}
-
-              {!selectedNode && !selectedPipe && !pendingPort && (
-                <p className="muted-text">
-                  Klicke ein Bauteil oder Rohr in der 3D-Szene an, um es zu verschieben, zu drehen, umzufärben oder Maße anzupassen.
-                </p>
-              )}
             </div>
-          )}
-
-          {rightTab === 'bom' && (
-            <div className="tab-content">
-              <div className="section-title">Rohr-Zuschnittliste</div>
-              {pipeRows.length === 0 ? (
-                <p className="muted-text">Noch keine Rohre im Gestell.</p>
-              ) : (
-                <table className="bom-table">
-                  <thead>
-                    <tr>
-                      <th>Ø</th>
-                      <th>Schnittlänge</th>
-                      <th>Menge</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pipeRows.map((r, i) => (
-                      <tr key={i}>
-                        <td>Ø {r.diameterMm} mm</td>
-                        <td><strong>{r.cutLengthMm} mm</strong></td>
-                        <td>{r.count}×</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <div className="section-title" style={{ marginTop: 16 }}>3D-Druckteile (Verbinder)</div>
-              {nodeRows.length === 0 ? (
-                <p className="muted-text">Noch keine Verbinder platziert.</p>
-              ) : (
-                <table className="bom-table">
-                  <thead>
-                    <tr>
-                      <th>Art.-Nr.</th>
-                      <th>Teil</th>
-                      <th>Menge</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {nodeRows.map((r, i) => (
-                      <tr key={i}>
-                        <td><code>{r.articleNumber}</code></td>
-                        <td>
-                          <div>{r.name}</div>
-                          <a className="stl-dl" href={r.stlPath} download>
-                            {r.stlPath.split('/').pop()}
-                          </a>
-                        </td>
-                        <td>{r.count}×</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {rightTab === 'statics' && (
-            <div className="tab-content">
-              <div className="section-title">Belastbarkeits-Schätzung</div>
-              <div className="stat-box">
-                <div className="prop-line"><span>Max. Spannweite:</span><strong>{load.maxSpanMm} mm (Ø {load.maxSpanDiameterMm})</strong></div>
-                <div className="prop-line"><span>Richtwert Einzellast (Mitte):</span><strong>~ {load.estimatedSafeCenterLoadKg} kg</strong></div>
-                <div className="prop-line"><span>Richtwert Gesamtgestell:</span><strong>~ {load.estimatedFrameLoadKg} kg</strong></div>
-              </div>
-
-              {load.warnings.length > 0 && (
-                <ul className="warn-list">
-                  {load.warnings.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="disclaimer-box">
-                <strong>Haftungsausschluss:</strong> Diese Berechnung ist nur eine grobe, unverbindliche Überschlagsrechnung (Annahme: Alu-Rohr + gedruckter Verbinder). Sie ersetzt keine statische Prüfung. Druckmaterial (PLA/PETG/ASA), Infill, Wandstärke und Layerhaftung beeinflussen die Tragfähigkeit stark. Nutzung auf eigene Verantwortung – keine Haftung.
-              </div>
-            </div>
-          )}
-        </aside>
+          </aside>
+        )}
       </div>
+
+      {/* Modal: Stückliste / Statik */}
+      {infoModal && (
+        <div className="info-modal-backdrop" onClick={() => setInfoModal(null)}>
+          <div className="info-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="info-modal-header">
+              <div className="info-modal-tabs">
+                <button
+                  type="button"
+                  className={`btn ${infoModal === 'bom' ? 'btn-primary' : 'btn-soft'}`}
+                  onClick={() => setInfoModal('bom')}
+                >
+                  <Download size={14} /> Stückliste
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${infoModal === 'statics' ? 'btn-primary' : 'btn-soft'}`}
+                  onClick={() => setInfoModal('statics')}
+                >
+                  <ShieldAlert size={14} /> Statik
+                </button>
+              </div>
+              <button
+                type="button"
+                className="info-modal-close"
+                onClick={() => setInfoModal(null)}
+                title="Schließen (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="info-modal-body">
+              {infoModal === 'bom' && (
+                <div>
+                  <div className="section-title">Rohr-Zuschnittliste</div>
+                  {pipeRows.length === 0 ? (
+                    <p className="muted-text">Noch keine Rohre im Gestell.</p>
+                  ) : (
+                    <table className="bom-table">
+                      <thead>
+                        <tr>
+                          <th>Ø</th>
+                          <th>Schnittlänge</th>
+                          <th>Menge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pipeRows.map((r, i) => (
+                          <tr key={i}>
+                            <td>Ø {r.diameterMm} mm</td>
+                            <td><strong>{r.cutLengthMm} mm</strong></td>
+                            <td>{r.count}×</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div className="section-title" style={{ marginTop: 18 }}>3D-Druckteile (Verbinder)</div>
+                  {nodeRows.length === 0 ? (
+                    <p className="muted-text">Noch keine Verbinder platziert.</p>
+                  ) : (
+                    <table className="bom-table">
+                      <thead>
+                        <tr>
+                          <th>Art.-Nr.</th>
+                          <th>Teil</th>
+                          <th>Menge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {nodeRows.map((r, i) => (
+                          <tr key={i}>
+                            <td><code>{r.articleNumber}</code></td>
+                            <td>
+                              <div>{r.name}</div>
+                              <a className="stl-dl" href={r.stlPath} download>
+                                {r.stlPath.split('/').pop()}
+                              </a>
+                            </td>
+                            <td>{r.count}×</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {infoModal === 'statics' && (
+                <div>
+                  <div className="section-title">Belastbarkeits-Schätzung</div>
+                  <div className="stat-box">
+                    <div className="prop-line"><span>Max. Spannweite:</span><strong>{load.maxSpanMm} mm (Ø {load.maxSpanDiameterMm})</strong></div>
+                    <div className="prop-line"><span>Richtwert Einzellast (Mitte):</span><strong>~ {load.estimatedSafeCenterLoadKg} kg</strong></div>
+                    <div className="prop-line"><span>Richtwert Gesamtgestell:</span><strong>~ {load.estimatedFrameLoadKg} kg</strong></div>
+                  </div>
+
+                  {load.warnings.length > 0 && (
+                    <ul className="warn-list">
+                      {load.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="disclaimer-box">
+                    <strong>Haftungsausschluss:</strong> Diese Berechnung ist nur eine grobe, unverbindliche Überschlagsrechnung (Annahme: Alu-Rohr + gedruckter Verbinder). Sie ersetzt keine statische Prüfung. Druckmaterial (PLA/PETG/ASA), Infill, Wandstärke und Layerhaftung beeinflussen die Tragfähigkeit stark. Nutzung auf eigene Verantwortung – keine Haftung.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

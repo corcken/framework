@@ -218,6 +218,7 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
   const selectedType = useConfigStore((s) => s.selectedType);
   const selectItem = useConfigStore((s) => s.selectItem);
   const movePipe = useConfigStore((s) => s.movePipe);
+  const togglePipeConnectionLock = useConfigStore((s) => s.togglePipeConnectionLock);
   const showDimensions = useConfigStore((s) => s.showDimensions);
 
   const isSelected = selectedType === 'pipe' && selectedUid === pipe.uid;
@@ -258,6 +259,55 @@ const PipeMesh: React.FC<{ pipe: PipeSegment }> = ({ pipe }) => {
           emissiveIntensity={isSelected ? 0.3 : 0}
         />
       </mesh>
+      {/* Schloss pro Anschlusspunkt (Start / Ende) */}
+      {pipe.startNodeUid && (
+        <Html
+          center
+          position={[0, -axisLen / 2 + Math.min(34, axisLen * 0.22), 0]}
+          distanceFactor={950}
+        >
+          <button
+            type="button"
+            className={`conn-lock-btn ${pipe.startLocked === false ? 'unlocked' : 'locked'}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePipeConnectionLock(pipe.uid, 'start');
+            }}
+            title={
+              pipe.startLocked === false
+                ? 'Anschluss entsperrt (klicken zum Sperren / gemeinsam verschieben)'
+                : 'Anschluss gesperrt (klicken zum Öffnen / unabhängig verschieben)'
+            }
+          >
+            {pipe.startLocked === false ? '🔓' : '🔒'}
+          </button>
+        </Html>
+      )}
+
+      {pipe.endNodeUid && (
+        <Html
+          center
+          position={[0, axisLen / 2 - Math.min(34, axisLen * 0.22), 0]}
+          distanceFactor={950}
+        >
+          <button
+            type="button"
+            className={`conn-lock-btn ${pipe.endLocked === false ? 'unlocked' : 'locked'}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePipeConnectionLock(pipe.uid, 'end');
+            }}
+            title={
+              pipe.endLocked === false
+                ? 'Anschluss entsperrt (klicken zum Sperren / gemeinsam verschieben)'
+                : 'Anschluss gesperrt (klicken zum Öffnen / unabhängig verschieben)'
+            }
+          >
+            {pipe.endLocked === false ? '🔓' : '🔒'}
+          </button>
+        </Html>
+      )}
+
       {(showDimensions || pipe.locked) && (
         <Html center distanceFactor={950} style={{ pointerEvents: 'none' }}>
           <div className="dim-label-stack">
