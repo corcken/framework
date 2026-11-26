@@ -24,11 +24,6 @@ export function getPipeAxisLengthMm(pipe: PipeSegment): number {
   return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
 }
 
-export function getPipeCutLengthMm(pipe: PipeSegment): number {
-  const axis = getPipeAxisLengthMm(pipe);
-  return Math.max(10, Math.round(axis - pipe.startInsertionMm - pipe.endInsertionMm));
-}
-
 export interface BoundingBoxMm {
   width: number;
   depth: number;

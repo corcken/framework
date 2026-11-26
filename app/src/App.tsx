@@ -31,15 +31,19 @@ import {
   PIPE_COLORS,
   REDUCER_PAIRS,
   ROUND_DIAMETERS,
+  getCatalogItem,
 } from './data/catalog';
 import { useConfigStore } from './store/useConfigStore';
+import { EXAMPLE_DEFINITIONS } from './data/examples';
 import { SceneCanvas } from './components/SceneCanvas';
 import { buildBom, downloadZipBundle, generatePdfDoc } from './utils/exportPdfZip';
 import { computeFrameBounds, estimateFrameLoad, getPipeAxisLengthMm } from './utils/geometry';
+import { ScenePhoto } from './types/system';
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const capturePhotoRef = useRef<(() => ScenePhoto | null) | null>(null);
 
   const meta = useConfigStore((s) => s.meta);
   const setMeta = useConfigStore((s) => s.setMeta);
@@ -55,6 +59,7 @@ export function App() {
   const setActivePipeColor = useConfigStore((s) => s.setActivePipeColor);
   const selectedUid = useConfigStore((s) => s.selectedUid);
   const selectedType = useConfigStore((s) => s.selectedType);
+  const selectItem = useConfigStore((s) => s.selectItem);
   const pendingPort = useConfigStore((s) => s.pendingPort);
   const setPendingPort = useConfigStore((s) => s.setPendingPort);
   const showDimensions = useConfigStore((s) => s.showDimensions);
@@ -72,7 +77,7 @@ export function App() {
   const toggleLockSelected = useConfigStore((s) => s.toggleLockSelected);
   const togglePipeConnectionLock = useConfigStore((s) => s.togglePipeConnectionLock);
   const deleteSelected = useConfigStore((s) => s.deleteSelected);
-  const loadDemoFrame = useConfigStore((s) => s.loadDemoFrame);
+  const loadExample = useConfigStore((s) => s.loadExample);
   const clearProject = useConfigStore((s) => s.clearProject);
   const exportProjectFile = useConfigStore((s) => s.exportProjectFile);
   const importProjectFile = useConfigStore((s) => s.importProjectFile);
@@ -83,18 +88,20 @@ export function App() {
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [headerMenuTab, setHeaderMenuTab] = useState<'bom' | 'statics'>('bom');
   const [colorsModalOpen, setColorsModalOpen] = useState(false);
+  const [examplesModalOpen, setExamplesModalOpen] = useState(false);
   const [busyZip, setBusyZip] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (colorsModalOpen) setColorsModalOpen(false);
+        if (examplesModalOpen) setExamplesModalOpen(false);
+        else if (colorsModalOpen) setColorsModalOpen(false);
         else if (headerMenuOpen) setHeaderMenuOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [colorsModalOpen, headerMenuOpen]);
+  }, [examplesModalOpen, colorsModalOpen, headerMenuOpen]);
 
   // Zustand für ausklappbare Kategorien (standardmäßig alle geöffnet)
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
@@ -163,8 +170,8 @@ export function App() {
   };
 
   const handleExportPdf = () => {
-    const dataUrl = canvasRef.current?.toDataURL('image/png');
-    const doc = generatePdfDoc(meta, nodes, pipes, dataUrl);
+    const photo = capturePhotoRef.current?.() ?? null;
+    const doc = generatePdfDoc(meta, nodes, pipes, photo);
     const safeName = (meta.name || 'gestell').replace(/[^a-zA-Z0-9_-]+/g, '_');
     doc.save(`${safeName}_Zeichnung_Stueckliste.pdf`);
   };
@@ -172,8 +179,8 @@ export function App() {
   const handleExportZip = async () => {
     setBusyZip(true);
     try {
-      const dataUrl = canvasRef.current?.toDataURL('image/png');
-      await downloadZipBundle(exportProjectFile(), dataUrl);
+      const photo = capturePhotoRef.current?.() ?? null;
+      await downloadZipBundle(exportProjectFile(), photo);
     } finally {
       setBusyZip(false);
     }
@@ -234,10 +241,10 @@ export function App() {
       {/* Kopfzeile */}
       <header className="topbar">
         <div className="topbar-left">
-          <div className="brand">
+          <a className="brand" href="#/" title="Zur Startseite">
             <Box size={20} className="brand-icon" />
             <span>Gestell-Konfigurator</span>
-          </div>
+          </a>
           <input
             className="meta-input"
             value={meta.name}
@@ -248,8 +255,13 @@ export function App() {
         </div>
 
         <div className="topbar-actions">
-          <button className="btn btn-soft" onClick={loadDemoFrame} title="Beispiel-Gestell laden">
-            <Sparkles size={15} /> Beispiel
+          <button
+            type="button"
+            className="btn btn-soft"
+            onClick={() => setExamplesModalOpen(true)}
+            title="Beispielprojekte anzeigen und laden"
+          >
+            <Sparkles size={15} /> Beispiele
           </button>
           <button
             type="button"
@@ -321,7 +333,7 @@ export function App() {
             type="button"
             className={`btn ${headerMenuOpen ? 'btn-active' : 'btn-primary'}`}
             onClick={() => setHeaderMenuOpen(!headerMenuOpen)}
-            title="Statik, Stückliste, Rohrbemaßung, Snap-in, Laden/Speichern & Export"
+            title="Statik, Stückliste, Bemaßung, Snap-in, Laden/Speichern & Export"
           >
             <SlidersHorizontal size={15} />
             <span>Projekt &amp; Auswertung</span>
@@ -514,7 +526,10 @@ export function App() {
 
         {/* 3D Viewport */}
         <main className="viewport-area">
-          <SceneCanvas onCanvasReady={(c) => (canvasRef.current = c)} />
+          <SceneCanvas
+            onCanvasReady={(c) => (canvasRef.current = c)}
+            captureRef={capturePhotoRef}
+          />
 
           {/* Statusleiste unten im Viewport */}
           <div className="viewport-hud">
@@ -535,11 +550,24 @@ export function App() {
           </div>
         </main>
 
-        {/* Rechte Sidebar: Immer Bauteil, ausgeblendet wenn nichts ausgewählt */}
+        {/* Rechtes Modal: erscheint bei Auswahl, verschwindet ohne Auswahl */}
         {showRightSidebar && (
-          <aside className="sidebar-right">
+          <aside className="sidebar-right right-modal">
             <div className="sidebar-right-header">
-              <Layers size={14} /> Bauteil
+              <span className="sidebar-right-title">
+                <Layers size={14} /> Bauteil
+              </span>
+              <button
+                type="button"
+                className="sidebar-collapse-btn"
+                onClick={() => {
+                  selectItem(null, null);
+                  setPendingPort(null);
+                }}
+                title="Fenster schließen"
+              >
+                <X size={15} />
+              </button>
             </div>
 
             <div className="tab-content">
@@ -553,7 +581,7 @@ export function App() {
                       max={4000}
                       step={10}
                       value={portPipeLen}
-                      onChange={(e) => setPortPipeLen(Number(e.target.value))}
+                      onChange={(e) => setPortPipeLen(Math.max(1, Math.round(Number(e.target.value))))}
                     />
                     <span>mm</span>
                     <button
@@ -569,6 +597,23 @@ export function App() {
               {selectedNode && (
                 <div className="prop-card">
                   <div className="section-title">Ausgewählter Verbinder</div>
+                  {(() => {
+                    const item = getCatalogItem(selectedNode.catalogId);
+                    const variant = item?.getVariant(
+                      selectedNode.diameterMm,
+                      selectedNode.secondDiameterMm
+                    );
+                    if (!variant) return null;
+                    return (
+                      <div className="selected-part-preview">
+                        <img
+                          src={variant.previewPath}
+                          alt={item?.name ?? selectedNode.catalogId}
+                        />
+                        <div className="selected-part-name">{item?.name ?? selectedNode.catalogId}</div>
+                      </div>
+                    );
+                  })()}
                   <div className="prop-line"><span>Artikel-Nr.:</span><strong>{selectedNode.articleNumber}</strong></div>
                   <div className="prop-line">
                     <span>Position (mm):</span>
@@ -661,17 +706,17 @@ export function App() {
                 <div className="prop-card">
                   <div className="section-title">Ausgewähltes Rohr</div>
                   <div className="prop-line"><span>Durchmesser:</span><strong>Ø {selectedPipe.diameterMm} mm</strong></div>
-                  <div className="prop-line"><span>Achsmaß:</span><strong>{getPipeAxisLengthMm(selectedPipe)} mm</strong></div>
+                  <div className="prop-line"><span>Rohrlänge:</span><strong>{getPipeAxisLengthMm(selectedPipe)} mm</strong></div>
 
-                  <div className="section-title" style={{ marginTop: 10 }}>Länge anpassen (mm)</div>
+                  <div className="section-title" style={{ marginTop: 10 }}>Rohrlänge anpassen (mm)</div>
                   <div className="inline-row">
                     <input
                       type="number"
-                      min={30}
+                      min={10}
                       max={4000}
                       step={10}
                       value={getPipeAxisLengthMm(selectedPipe)}
-                      onChange={(e) => updatePipeLength(selectedPipe.uid, Math.max(30, Number(e.target.value)))}
+                      onChange={(e) => updatePipeLength(selectedPipe.uid, Math.max(10, Math.round(Number(e.target.value))))}
                     />
                     <span>mm</span>
                   </div>
@@ -721,10 +766,10 @@ export function App() {
                   type="button"
                   className={`btn ${showDimensions ? 'btn-active' : 'btn-soft'}`}
                   onClick={() => setShowDimensions(!showDimensions)}
-                  title={`Rohrbemaßung in 3D-Ansicht ${showDimensions ? 'ausschalten' : 'einschalten'}`}
+                  title={`Bemaßung in 3D-Ansicht ${showDimensions ? 'ausschalten' : 'einschalten'}`}
                 >
                   <Ruler size={15} />
-                  <span>Rohrbemaßung</span>
+                  <span>Bemaßung</span>
                   <span className={`toggle-pill ${showDimensions ? 'on' : 'off'}`}>
                     {showDimensions ? 'An' : 'Aus'}
                   </span>
@@ -748,8 +793,8 @@ export function App() {
                   <button
                     type="button"
                     className={`snap-val-badge ${snapDistanceMm === 0 ? 'off' : 'on'}`}
-                    onClick={() => setSnapDistanceMm(snapDistanceMm === 0 ? 10 : 0)}
-                    title={snapDistanceMm === 0 ? 'Snap-in aktivieren (10 mm)' : 'Snap-in ausschalten (0)'}
+                    onClick={() => setSnapDistanceMm(snapDistanceMm === 0 ? 50 : 0)}
+                    title={snapDistanceMm === 0 ? 'Snap-in aktivieren (50 mm)' : 'Snap-in ausschalten (0)'}
                   >
                     {snapDistanceMm === 0 ? 'Aus' : `${snapDistanceMm} mm`}
                   </button>
@@ -814,7 +859,7 @@ export function App() {
                         <thead>
                           <tr>
                             <th>Ø</th>
-                            <th>Schnittlänge</th>
+                            <th>Länge</th>
                             <th>Menge</th>
                           </tr>
                         </thead>
@@ -822,7 +867,7 @@ export function App() {
                           {pipeRows.map((r, i) => (
                             <tr key={i}>
                               <td>Ø {r.diameterMm} mm</td>
-                              <td><strong>{r.cutLengthMm} mm</strong></td>
+                              <td><strong>{r.lengthMm} mm</strong></td>
                               <td>{r.count}×</td>
                             </tr>
                           ))}
@@ -886,6 +931,60 @@ export function App() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Beispielprojekte */}
+      {examplesModalOpen && (
+        <div className="info-modal-backdrop" onClick={() => setExamplesModalOpen(false)}>
+          <div className="info-modal-dialog examples-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="info-modal-header">
+              <div className="sidebar-left-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Sparkles size={17} style={{ color: 'var(--accent)' }} /> Beispielprojekte
+              </div>
+              <button
+                type="button"
+                className="info-modal-close"
+                onClick={() => setExamplesModalOpen(false)}
+                title="Schließen (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="info-modal-body">
+              <p className="examples-intro">
+                Beispiele als Ausgangspunkt laden. Alle Maße und Verbindungen lassen sich danach
+                anpassen.
+              </p>
+              <div className="examples-grid">
+                {EXAMPLE_DEFINITIONS.map((example) => (
+                  <article className="example-card" key={example.id}>
+                    <div className="example-thumb">
+                      <img src={example.previewPath} alt={example.name} />
+                    </div>
+                    <div className="example-card-body">
+                      <div className="example-card-head">
+                        <h3>{example.name}</h3>
+                        <span>{example.dimensions}</span>
+                      </div>
+                      <p>{example.description}</p>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => {
+                          loadExample(example.id);
+                          setExamplesModalOpen(false);
+                        }}
+                        title={`${example.name} laden`}
+                      >
+                        <FolderOpen size={14} /> Laden
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         </div>

@@ -82,7 +82,9 @@ export interface PipeSegment {
   endNodeUid?: string;
   endPortId?: string;
   endLocked?: boolean;
+  /** Einstecktiefe am Start – nur Information, beeinflusst die Rohrlänge nicht. */
   startInsertionMm: number;
+  /** Einstecktiefe am Ende – nur Information, beeinflusst die Rohrlänge nicht. */
   endInsertionMm: number;
   color: string;
   locked?: boolean;
@@ -100,4 +102,11 @@ export interface ProjectFile {
   meta: ProjectMeta;
   nodes: PlacedNode[];
   pipes: PipeSegment[];
+}
+
+/** Farbige 3D-Ansicht für den PDF-Export (ohne Arbeitsraster/Helfer). */
+export interface ScenePhoto {
+  dataUrl: string;
+  width: number;
+  height: number;
 }
